@@ -1,29 +1,3 @@
-/*#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
-int main(int argc, char *argv[])  
-{
-    //declare command arguemnts
-    char* imgName = argv[1];
-    char* mountDir = " ./mountpoint";
-    char mountCommand[100] = "sudo mount ";
-    char mkdirCommand[50] = "mkdir";
-
-    //concatenate mount command arguments
-    strcat(mountCommand, imgName);
-    strcat(mountCommand, mountDir);
-
-    //concatenate mkdir command arguemnts
-    strcat(mkdirCommand, mountDir);
-
-    //make mountpoint dir
-    system(mkdirCommand);
-
-    //mount image
-    system(mountCommand);
-}
-*/
 // starter file provided by operating systems ta's
 // include libraries
 
@@ -31,8 +5,8 @@ int main(int argc, char *argv[])
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <ctype.h>
-#include <fcntl.h>
+//#include <ctype.h>
+//#include <fcntl.h>
 #define BUFSIZE 40
 #define PATH_SIZE 4096 // max possible size for path string.
 #define OPEN_FILE_TABLE_SIZE 10 // max files for files.
@@ -63,7 +37,6 @@ typedef struct __attribute__((packed)){
         unsigned short BPB_ExtFlags;
         unsigned short BPB_FSVer;
         unsigned int BPB_RootClus;
-
         unsigned short BPB_FSInfo;
         unsigned short BPB_BkBootSec;
         unsigned char BPB_Reserved[12];
@@ -76,223 +49,238 @@ typedef struct __attribute__((packed)){
 } BPB_Block;
 
 typedef struct {
-	char path[PATH_SIZE]; // path string
-	// add a variable to help keep track of current working directory in file.
-	// Hint: In the image, where does the first directory entry start?
+        char path[PATH_SIZE]; // path string
+        // add a variable to help keep track of current working directory in file.
+        // Hint: In the image, where does the first directory entry start?
 } CWD;
 
 typedef struct {
-	int size;
-	char ** items;
+        int size;
+        char ** items;
 } tokenlist;
 
+//struct to check on free space i believe. To my knwoledge 
+typedef struct __attribute__((packed)) {
+        unsigned int FSI_LeadSig;
+        unsigned char FSI_Reserved1[480];                       //FAT32 spec says its 480 byts so i think this is right
+        unsigned int FSI_StrucSig;
+        unsigned int FSI_Free_Count;
+        unsigned int FSI_Nxt_Free;
+        unsigned char FSI_Reserved2[12];                        //same here about the size
+        unsigned int FSI_TrailSig;
+
+} FSInfo;
+
+// global variables
 FILE *imgFile;
 BPB_Block BootBlock;
-Environment ENV;
+FSInfo fsi;
 int FirstDataSector;
+CWD cwd;
 
 tokenlist * tokenize(char * input);
 void free_tokens(tokenlist * tokens);
 char * get_input();
 void add_token(tokenlist * tokens, char * item);
 void add_to_path(char * dir);
-void addtoPath(int, char*);
-
-// global variables
-CWD cwd;
 
 int main(int argc, char * argv[]) {
-	// error checking for number of arguments.
-	// read and open argv[1] in file pointer.
-	// obtain important information from bpb as well as initialize any important global variables
+        // error checking for number of arguments.
+        // read and open argv[1] in file pointer.
+        // obtain important information from bpb as well as initialize any important global variables
 
-	//declare command arguemnts
-	char* imgName = argv[1];
-	char* mountDir = " ./mountpoint";
-	char mountCommand[100] = "sudo mount ";
-	char mkdirCommand[50] = "mkdir";
+        imgFile = fopen(argv[1], "r+");
+        fread(&BootBlock, sizeof(BPB_Block), 1, imgFile);
 
-    	//concatenate mount command arguments
-    	strcat(mountCommand, imgName);
-    	strcat(mountCommand, mountDir);
+        FirstDataSector = BootBlock.BPB_RsvdSecCnt + (BootBlock.BPB_NumberofFATS* BootBlock.BPB_FATSz32);
 
-    	//concatenate mkdir command arguemnts
-    	strcat(mkdirCommand, mountDir);
+        add_to_path(argv[1]);
 
-    	//make mountpoint dir
-    	system(mkdirCommand);
+        // parser
+        char *input;
 
-    	//mount image
-    	system(mountCommand);
+        long offset = 0;
 
-	memset(cwd.path, 0, PATH_SIZE);
+        while(1) {
+                printf("%s/>", cwd.path);
+                input = get_input();
+                tokenlist * tokens = tokenize(input);
+//              add_to_path(tokens->items[0]);
+//              printf("tokens size: %d\n", tokens->size);
+//              for(int i = 0; i < tokens->size; i++) {
+//                      printf("token %d: %s\n", i, tokens->items[i]);
+//              }
 
-	// parser
-	char *input;
+                if(strcmp(tokens->items[0], "exit") == 0){
+                        return 0;
+                }
+                else if(strcmp(tokens->items[0], "info") == 0){
+                        printf("calling info\n");
+                        offset = BootBlock.BPB_BytsPerSec * BootBlock.BPB_FSInfo;
+                        Info(offset);
+                }
+                else if(strcmp(tokens->items[0], "ls") == 0){
+                        printf("calling ls\n");
+                }
+                else if(strcmp(tokens->items[0], "cd") == 0){
+                        printf("calling cd\n");
+                }
+                else if(strcmp(tokens->items[0], "size") == 0){
+                        printf("calling cd\n");
+                }
+                else if(strcmp(tokens->items[0], "creat") == 0){
+                        printf("calling creat\n");
+                }
+                else if(strcmp(tokens->items[0], "mkdir") == 0){
+                        printf("calling mkdir\n");
+                }
+                else if(strcmp(tokens->items[0], "rm") == 0){
+                        printf("calling rm\n");
+                }
+                else if(strcmp(tokens->items[0], "rmdir") == 0){
+                        printf("calling rmdir\n");
+                }
+                else if(strcmp(tokens->items[0], "open") == 0){
+                        printf("calling open\n");
+                }
+                else if(strcmp(tokens->items[0], "close") == 0){
+                        printf("calling close\n");
+                }
+                else if(strcmp(tokens->items[0], "read") == 0){
+                        printf("calling read\n");
+                }
+                else if(strcmp(tokens->items[0], "write") == 0){
+                        printf("calling write\n");
+                }
 
-	while(1) {
-		printf("%s/>", cwd.path);
-		input = get_input();
-		tokenlist * tokens = tokenize(input);
-		printf("tokens size: %d\n", tokens->size);
-		for(int i = 0; i < tokens->size; i++) {
-			printf("token %d: %s\n", i, tokens->items[i]);
-		}
+                //add_to_path(tokens->items[0]); // move this out to its correct place;
+                free(input);
+                free_tokens(tokens);
+        }
 
-		if(strcmp(tokens->items[0], "exit") == 0){
-			return 0;
-		}
-		else if(strcmp(tokens->items[0], "info") == 0){
-			printf("calling info\n");
-		}
-		else if(strcmp(tokens->items[0], "ls") == 0){
-			printf("calling ls\n");
-		}
-		else if(strcmp(tokens->items[0], "cd") == 0){
-			printf("calling cd\n");
-		}
-		else if(strcmp(tokens->items[0], "size") == 0){
-			printf("calling cd\n");
-		}
-		else if(strcmp(tokens->items[0], "creat") == 0){
-			printf("calling creat\n");
-		}
-		else if(strcmp(tokens->items[0], "mkdir") == 0){
-			printf("calling mkdir\n");
-		}
-		else if(strcmp(tokens->items[0], "rm") == 0){
-			printf("calling rm\n");
-		}
-		else if(strcmp(tokens->items[0], "rmdir") == 0){
-			printf("calling rmdir\n");
-		}
-		else if(strcmp(tokens->items[0], "open") == 0){
-			printf("calling open\n");
-		}
-		else if(strcmp(tokens->items[0], "close") == 0){
-			printf("calling close\n");
-		}
-		else if(strcmp(tokens->items[0], "read") == 0){
-			printf("calling read\n");
-		}
-		else if(strcmp(tokens->items[0], "write") == 0){
-			printf("calling write\n");
-		}
+        return 0;
+}
 
-		//add_to_path(tokens->items[0]); // move this out to its correct place;
-		free(input);
-		free_tokens(tokens);
-	}
+void Info(long offset){
+        fseek(imgFile, offset, SEEK_SET);
+        fread(&fsi, sizeof(FSInfo), 1, imgFile);
 
-	return 0;
+        printf("Bytes Per Sector: %d\n", BootBlock.BPB_BytsPerSec);
+        printf("Sectors Per Cluster: %d\n", BootBlock.BPB_SecPerClus);
+        printf("Total clusters in Data Region: %d\n", BootBlock.BPB_TotalSec32);
+        printf("# of enteries in one FAT: %d\n", BootBlock.BPB_FATSz32);
+        printf("Size of Image (bytes): %d\n");                                          //not sure which variable this one is 
+        printf("Root Cluster: %d\n", BootBlock.BPB_RootClus);
 }
 
 // helper functions -- to navigate file image
 // commands -- all commands mentioned in part 2-6 (17 cmds)
 // add directory string to cwd path -- helps keep track of where we are in image.
 void add_to_path(char * dir) {
-	if(dir == NULL) {
-		return;
-	}
-	else if(strcmp(dir, "..") == 0) {
-		char *last = strrchr(cwd.path, '/');
-		if(last != NULL) {
-			*last = '\0';
-		}
-	} else if(strcmp(dir, ".") != 0) {
-		strcat(cwd.path, "/");
-		strcat(cwd.path, dir);
-	}
+        if(dir == NULL) {
+                return;
+        }
+        else if(strcmp(dir, "..") == 0) {
+                char *last = strrchr(cwd.path, '/');
+                if(last != NULL) {
+                        *last = '\0';
+                }
+        } else if(strcmp(dir, ".") != 0) {
+                strcat(cwd.path, "/");
+                strcat(cwd.path, dir);
+        }
 }
 
 void free_tokens(tokenlist *tokens)
 {
-	for (int i = 0; i < tokens->size; i++)
-		free(tokens->items[i]);
-	free(tokens->items);
-	free(tokens);
+        for (int i = 0; i < tokens->size; i++)
+                free(tokens->items[i]);
+        free(tokens->items);
+        free(tokens);
 }
+
 
 // take care of delimiters {'\"', ' '}
 tokenlist * tokenize(char * input) {
-	int is_in_string = 0;
-	tokenlist * tokens = (tokenlist *) malloc(sizeof(tokenlist));
-	tokens->size = 0;
-	tokens->items = (char **) malloc(sizeof(char *));
-	char ** temp;
-	int resizes = 1;
-	char * token = input;
-	for(; *input != '\0'; input++) {
-		if(*input == '\"' && !is_in_string) {
-			is_in_string = 1;
-			token = input + 1;
-		} else if(*input == '\"' && is_in_string) {
-			*input = '\0';
-			add_token(tokens, token);
-			while(*(input + 1) == ' ') {
-				input++;
-			}
-			token = input + 1;
-			is_in_string = 0;
-		} else if(*input == ' ' && !is_in_string) {
-			*input = '\0';
-			while(*(input + 1) == ' ') {
-				input++;
-			}
-			add_token(tokens, token);
-			token = input + 1;
-		}
-	}
-	if(is_in_string) {
-		printf("error: string not properly enclosed.\n");
-		tokens->size = -1;
-		return tokens;
-	}
+        int is_in_string = 0;
+        tokenlist * tokens = (tokenlist *) malloc(sizeof(tokenlist));
+        tokens->size = 0;
+        tokens->items = (char **) malloc(sizeof(char *));
+        char ** temp;
+        int resizes = 1;
+        char * token = input;
+        for(; *input != '\0'; input++) {
+                if(*input == '\"' && !is_in_string) {
+                        is_in_string = 1;
+                        token = input + 1;
+                } else if(*input == '\"' && is_in_string) {
+                        *input = '\0';
+                        add_token(tokens, token);
+                        while(*(input + 1) == ' ') {
+                                input++;
+                        }
+                        token = input + 1;
+                        is_in_string = 0;
+                } else if(*input == ' ' && !is_in_string) {
+                        *input = '\0';
+                        while(*(input + 1) == ' ') {
+                                input++;
+                        }
+                        add_token(tokens, token);
+                        token = input + 1;
+                }
+        }
+        if(is_in_string) {
+                printf("error: string not properly enclosed.\n");
+                tokens->size = -1;
+                return tokens;
+        }
 
-	// add in last token before null character.
-	if(*token != '\0') {
-		add_token(tokens, token);
-	}
+        // add in last token before null character.
+        if(*token != '\0') {
+                add_token(tokens, token);
+        }
 
-	return tokens;
+        return tokens;
 }
+
 
 void add_token(tokenlist *tokens, char *item)
 {
-	int i = tokens->size;
-	tokens->items = (char **) realloc(tokens->items, (i + 2) * sizeof(char *));
-	tokens->items[i] = (char *) malloc(strlen(item) + 1);
-	tokens->items[i + 1] = NULL;
-	strcpy(tokens->items[i], item);
-	tokens->size += 1;
+        int i = tokens->size;
+        tokens->items = (char **) realloc(tokens->items, (i + 2) * sizeof(char *));
+        tokens->items[i] = (char *) malloc(strlen(item) + 1);
+        tokens->items[i + 1] = NULL;
+        strcpy(tokens->items[i], item);
+        tokens->size += 1;
 }
 
 char * get_input() {
-	char * buf = (char *) malloc(sizeof(char) * BUFSIZE);
-	memset(buf, 0, BUFSIZE);
-	char c;
-	int len = 0;
-	int resizes = 1;
-	int is_leading_space = 1;
-	while((c = fgetc(stdin)) != '\n' && !feof(stdin)) {
-		// remove leading spaces.
-		if(c != ' ') {
-			is_leading_space = 0;
-		} else if(is_leading_space) {
-			continue;
-		}
-		buf[len] = c;
-		if(++len >= (BUFSIZE * resizes)) {
-			buf = (char *) realloc(buf, (BUFSIZE * ++resizes) + 1);
-			memset(buf + (BUFSIZE * (resizes - 1)), 0, BUFSIZE);
-		}
-	}
-	buf[len + 1] = '\0';
-	// remove trailing spaces.
-	char * end = &buf[len - 1];
-	while(*end == ' ') {
-		*end = '\0';
-		end--;
-	}
-	return buf;
+        char * buf = (char *) malloc(sizeof(char) * BUFSIZE);
+        memset(buf, 0, BUFSIZE);
+        char c;
+        int len = 0;
+        int resizes = 1;
+        int is_leading_space = 1;
+        while((c = fgetc(stdin)) != '\n' && !feof(stdin)) {
+                // remove leading spaces.
+                if(c != ' ') {
+                        is_leading_space = 0;
+                } else if(is_leading_space) {
+                        continue;
+                }
+                buf[len] = c;
+                if(++len >= (BUFSIZE * resizes)) {
+                        buf = (char *) realloc(buf, (BUFSIZE * ++resizes) + 1);
+                        memset(buf + (BUFSIZE * (resizes - 1)), 0, BUFSIZE);
+                }
+        }
+        buf[len + 1] = '\0';
+        // remove trailing spaces.
+        char * end = &buf[len - 1];
+        while(*end == ' ') {
+                *end = '\0';
+                end--;
+        }
+        return buf;
 }
