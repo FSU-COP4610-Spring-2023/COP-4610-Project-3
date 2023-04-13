@@ -11,7 +11,7 @@
 #define PATH_SIZE 4096 // max possible size for path string.
 #define OPEN_FILE_TABLE_SIZE 10 // max files for files.
 #define MAX_NAME_LENGTH 11 // 11 in total but 3 for extensions, we onl use 8.
-
+#define NUM_ALPHA 26
 // data structures for FAT32
 // Hint: BPB, DIR Entry, Open File Table -- how will you structure it?
 // stack implementaiton -- you will have to implement a dynamic stack
@@ -77,13 +77,14 @@ BPB_Block BootBlock;
 FSInfo fsi;
 int FirstDataSector;
 CWD cwd;
+int CurrentDirectory;
 
 tokenlist * tokenize(char * input);
 void free_tokens(tokenlist * tokens);
 char * get_input();
 void add_token(tokenlist * tokens, char * item);
 void add_to_path(char * dir);
-
+int lsCmd(int);
 int main(int argc, char * argv[]) {
         // error checking for number of arguments.
         // read and open argv[1] in file pointer.
@@ -100,7 +101,7 @@ int main(int argc, char * argv[]) {
         char *input;
 
         long offset = 0;
-
+        CurrentDirectory = FirstDataSector * BootBlock.BPB_BytsPerSec;
         while(1) {
                 printf("%s/>", cwd.path);
                 input = get_input();
@@ -120,7 +121,10 @@ int main(int argc, char * argv[]) {
                         Info(offset);
                 }
                 else if(strcmp(tokens->items[0], "ls") == 0){
-                        printf("calling ls\n");
+                        //printf("calling ls\n");
+                        int ls = 0;
+                        ls = lsCmd(CurrentDirectory);
+                        
                 }
                 else if(strcmp(tokens->items[0], "cd") == 0){
                         printf("calling cd\n");
@@ -283,4 +287,27 @@ char * get_input() {
                 end--;
         }
         return buf;
+}
+
+
+int lsCmd(int CurrentDirectory)
+{
+        //long offset2;
+        int numChar = 11;
+        char buffer[11];
+        //offset2 = FirstDataSector * BootBlock.BPB_BytsPerSec + 32;
+        CurrentDirectory += 32;
+        for (int i = 0; i < 5; i++)
+        {
+                fseek(imgFile, CurrentDirectory, SEEK_SET);
+                fread(buffer, sizeof(char), numChar, imgFile);
+                printf("%s\n", buffer);
+                // printf("location = %d\n", CurrentDirectory);
+                CurrentDirectory += 64;
+        }
+       
+
+        return 1;
+        
+
 }
