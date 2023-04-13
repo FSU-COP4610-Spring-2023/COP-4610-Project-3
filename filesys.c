@@ -85,6 +85,7 @@ char * get_input();
 void add_token(tokenlist * tokens, char * item);
 void add_to_path(char * dir);
 int lsCmd(int);
+void cdCmd(int, char*);
 int main(int argc, char * argv[]) {
         // error checking for number of arguments.
         // read and open argv[1] in file pointer.
@@ -128,6 +129,10 @@ int main(int argc, char * argv[]) {
                 }
                 else if(strcmp(tokens->items[0], "cd") == 0){
                         printf("calling cd\n");
+                        if(tokens->items[1] != NULL )
+                        {                        
+                        cdCmd(CurrentDirectory, tokens->items[1]);
+                        }
                 }
                 else if(strcmp(tokens->items[0], "size") == 0){
                         printf("calling cd\n");
@@ -301,6 +306,13 @@ int lsCmd(int CurrentDirectory)
         {
                 fseek(imgFile, CurrentDirectory, SEEK_SET);
                 fread(buffer, sizeof(char), numChar, imgFile);
+                for (int j = 0; j < 11; j++)
+                {
+                        if(buffer[j] == ' ')
+                        {
+                                buffer[j] = '\0';
+                        }
+                }
                 printf("%s\n", buffer);
                 // printf("location = %d\n", CurrentDirectory);
                 CurrentDirectory += 64;
@@ -311,3 +323,40 @@ int lsCmd(int CurrentDirectory)
         
 
 }
+
+void cdCmd(int CurrentDirectory, char* token)
+{
+int numChar = 11;
+        char buffer[11];
+        char Attribute[1];
+        //offset2 = FirstDataSector * BootBlock.BPB_BytsPerSec + 32;
+        CurrentDirectory += 32;
+        for (int i = 0; i < 5; i++)
+        {
+                fseek(imgFile, CurrentDirectory, SEEK_SET);
+                fread(buffer, sizeof(char), numChar, imgFile);
+                for (int j = 0; j < 11; j++)
+                {
+                        if(buffer[j] == ' ')
+                        {
+                                buffer[j] = '\0';
+                        }
+                }
+                printf("searching for %s\n", token);
+                if(!strcmp(token, buffer))
+                {
+                        printf("%s found\n", token);
+                        //should have moved the file pointer to the byte location that holds
+                        //the attribute, a check to make sure that the attribute = 10 is
+                        //necessary to avoid trying to cd into files that are not a directory.
+                        //not sure how to get the buffers to work. -Matt.
+                        //info for completeing cd is in OS Security video at timestamp 1:21:00
+                        fread(Attribute, sizeof(char), 1, imgFile);
+                        
+                }
+                // printf("location = %d\n", CurrentDirectory);
+                CurrentDirectory += 64;
+        }
+       
+}
+
