@@ -142,6 +142,9 @@ int main(int argc, char * argv[]) {
                 }
                 else if(strcmp(tokens->items[0], "mkdir") == 0){
                         printf("calling mkdir\n");
+                        int startingCluster = findUnusedCluster(imgFile, FirstDataSector);
+                        createDirectoryEntry(fp, tokens->items[1], startingCluster);
+                        updateFatEntry(fp, startingCluster, 0xFFFFFFFF);
                 }
                 else if(strcmp(tokens->items[0], "rm") == 0){
                         printf("calling rm\n");
@@ -359,4 +362,57 @@ int numChar = 11;
         }
        
 }
+
+int findUnusedCluster(FILE *fp, int startCluster) {
+        int fatOffset = startCluster * 4;
+        int fatSector = BootBlock.BPB_RsvdSecCnt + (fatOffset / BootBlock.BPB_BytsPerSec);
+        int fatEntryOffset = fatOffset % BootBlock.BPB_BytsPerSec;
+
+        while (1) {
+                fseek(fp, fatSector * BootBlock.BPB_BytsPerSec + fatEntryOffset, SEEK_SET);
+                int value;
+                fread(&value, 4, 1, fp);
+
+                if (value == 0) {
+                printf("found empty cluster\n");
+                return startCluster;
+                }
+                printf("searching clusters\n");
+                startCluster++;
+        }
+}
+
+typedef struct DirectoryEntry {
+    char DIR_Name[11];
+    int DIR_Attr;
+    int unused[10];
+    int DIR_FirstClusterHigh;
+    int unused2[4];
+    int DIR_FirstClusterLow;
+    int DIR_FileSize;
+};
+
+void createDirectoryEntry(FILE *fp, char *name, int start_cluster) {
+    struct DirectoryEntry dir_entry = {0};
+    strncpy(dir_entry.DIR_Name, name, strlen(name));
+    dir_entry.DIR_Attr = 0x10;
+    dir_entry.DIR_FirstClusterHigh = (start_cluster & 0xFFFF0000) >> 16;
+    dir_entry.DIR_FirstClusterLow = start_cluster & 0x0000FFFF;
+
+    // Need to write the new directory entry to the parent directory's cluster
+    // by calculating the offset of the new entry within the cluster
+    // and write the entry to that location - Nick
+}
+
+void updateFatEntry(FILE *fp, int cluster, int value) {
+    int fatOffset = cluster * 4;
+    int fatSector = BootBlock.BPB_RsvdSecCnt + (fatOffset / BootBlock.BPB_BytesPerSec);
+    int fatEntryOffset = fatOffset % BootBlock.BPB_BytesPerSec;
+
+    fseek(fp, fatSector * BootBlock.BPB_BytesPerSec + fatEntryOffset, SEEK_SET);
+    fwrite(&value, 4, 1, fp);
+}
+
+
+
 
