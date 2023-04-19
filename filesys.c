@@ -143,8 +143,10 @@ int main(int argc, char * argv[]) {
                 else if(strcmp(tokens->items[0], "mkdir") == 0){
                         printf("calling mkdir\n");
                         int startingCluster = findUnusedCluster(imgFile, FirstDataSector);
-                        createDirectoryEntry(fp, tokens->items[1], startingCluster);
-                        updateFatEntry(fp, startingCluster, 0xFFFFFFFF);
+                        //imgFile below this point in scope was fp, for the sake of compile testing
+                        //swapped to imgFile.
+                        createDirectoryEntry(imgFile, tokens->items[1], startingCluster);
+                        updateFatEntry(imgFile, startingCluster, 0xFFFFFFFF);
                 }
                 else if(strcmp(tokens->items[0], "rm") == 0){
                         printf("calling rm\n");
@@ -384,11 +386,18 @@ int findUnusedCluster(FILE *fp, int startCluster) {
 
 typedef struct DirectoryEntry {
     char DIR_Name[11];
-    int DIR_Attr;
+    char DIR_Attr;
+    char DIR_NTRes;
+    char DIR_CrtTimeTenth;
+    short DIR_CrtTime;
+    short DIR_CrtDate;
+    short DIR_LstAccDate;
+    short DIR_FstClusHI;
+    short DIR_WrtTime;
+    short DIR_WrtDate;
+    short DIR_FstClusLO;
     int unused[10];
-    int DIR_FirstClusterHigh;
     int unused2[4];
-    int DIR_FirstClusterLow;
     int DIR_FileSize;
 };
 
@@ -396,8 +405,8 @@ void createDirectoryEntry(FILE *fp, char *name, int start_cluster) {
     struct DirectoryEntry dir_entry = {0};
     strncpy(dir_entry.DIR_Name, name, strlen(name));
     dir_entry.DIR_Attr = 0x10;
-    dir_entry.DIR_FirstClusterHigh = (start_cluster & 0xFFFF0000) >> 16;
-    dir_entry.DIR_FirstClusterLow = start_cluster & 0x0000FFFF;
+    dir_entry.DIR_FstClusHI = (start_cluster & 0xFFFF0000) >> 16;
+    dir_entry.DIR_FstClusLO = start_cluster & 0x0000FFFF;
 
     // Need to write the new directory entry to the parent directory's cluster
     // by calculating the offset of the new entry within the cluster
@@ -406,10 +415,10 @@ void createDirectoryEntry(FILE *fp, char *name, int start_cluster) {
 
 void updateFatEntry(FILE *fp, int cluster, int value) {
     int fatOffset = cluster * 4;
-    int fatSector = BootBlock.BPB_RsvdSecCnt + (fatOffset / BootBlock.BPB_BytesPerSec);
-    int fatEntryOffset = fatOffset % BootBlock.BPB_BytesPerSec;
+    int fatSector = BootBlock.BPB_RsvdSecCnt + (fatOffset / BootBlock.BPB_BytsPerSec);
+    int fatEntryOffset = fatOffset % BootBlock.BPB_BytsPerSec;
 
-    fseek(fp, fatSector * BootBlock.BPB_BytesPerSec + fatEntryOffset, SEEK_SET);
+    fseek(fp, fatSector * BootBlock.BPB_BytsPerSec + fatEntryOffset, SEEK_SET);
     fwrite(&value, 4, 1, fp);
 }
 
