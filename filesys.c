@@ -71,6 +71,23 @@ typedef struct __attribute__((packed)) {
 
 } FSInfo;
 
+typedef struct DirectoryEntry {
+    char DIR_Name[11];
+    char DIR_Attr;
+    char DIR_NTRes;
+    char DIR_CrtTimeTenth;
+    short DIR_CrtTime;
+    short DIR_CrtDate;
+    short DIR_LstAccDate;
+    short DIR_FstClusHI;
+    short DIR_WrtTime;
+    short DIR_WrtDate;
+    short DIR_FstClusLO;
+    int unused[10];
+    int unused2[4];
+    int DIR_FileSize;
+};
+
 // global variables
 FILE *imgFile;
 BPB_Block BootBlock;
@@ -85,7 +102,7 @@ char * get_input();
 void add_token(tokenlist * tokens, char * item);
 void add_to_path(char * dir);
 int lsCmd(int);
-void cdCmd(int, char*);
+int cdCmd(int, char*);
 int main(int argc, char * argv[]) {
         // error checking for number of arguments.
         // read and open argv[1] in file pointer.
@@ -122,7 +139,7 @@ int main(int argc, char * argv[]) {
                         Info(offset);
                 }
                 else if(strcmp(tokens->items[0], "ls") == 0){
-                        //printf("calling ls\n");
+                        printf("calling ls\n");
                         int ls = 0;
                         ls = lsCmd(CurrentDirectory);
                         
@@ -131,7 +148,7 @@ int main(int argc, char * argv[]) {
                         printf("calling cd\n");
                         if(tokens->items[1] != NULL )
                         {                        
-                        cdCmd(CurrentDirectory, tokens->items[1]);
+                        CurrentDirectory = cdCmd(CurrentDirectory, tokens->items[1]);
                         }
                 }
                 else if(strcmp(tokens->items[0], "size") == 0){
@@ -299,19 +316,37 @@ char * get_input() {
         return buf;
 }
 
+void read_sector(FILE* imgFile, unsigned int sector_number, void* buffer)
+{
+        printf("location = %u\n", sector_number);
+        fseek(imgFile, sector_number, SEEK_SET);
+        fread(buffer, BootBlock.BPB_BytsPerSec, 1, imgFile);
 
-int lsCmd(int CurrentDirectory)
+
+}
+
+void dirEntryInit()
+{
+
+
+}
+int lsCmd(int Directory)
 {
         //long offset2;
         int numChar = 11;
-        char buffer[11];
+        char buffer[BootBlock.BPB_BytsPerSec];
         //offset2 = FirstDataSector * BootBlock.BPB_BytsPerSec + 32;
-        CurrentDirectory += 32;
-        for (int i = 0; i < 5; i++)
+        Directory += 32;
+        //int counter = 32;
+        printf("buffer[0] = %d\n", buffer[0]);
+        do 
         {
-                fseek(imgFile, CurrentDirectory, SEEK_SET);
-                fread(buffer, sizeof(char), numChar, imgFile);
-                for (int j = 0; j < 11; j++)
+                // fseek(imgFile, CurrentDirectory, SEEK_SET);
+                // fread(buffer, sizeof(char), 1, imgFile);
+                read_sector(imgFile,Directory, buffer);
+
+
+                for (int j = 0; j < 12; j++)
                 {
                         if(buffer[j] == ' ')
                         {
@@ -320,49 +355,64 @@ int lsCmd(int CurrentDirectory)
                 }
                 printf("%s\n", buffer);
                 // printf("location = %d\n", CurrentDirectory);
-                CurrentDirectory += 64;
-        }
-       
-
+                Directory += 64;
+                //counter += 64;
+        } while(buffer[0] != 0x00);
         return 1;
         
 
 }
 
-void cdCmd(int CurrentDirectory, char* token)
+int cdCmd(int CurrentDirectory, char* token)
 {
-int numChar = 11;
-        char buffer[11];
-        char Attribute[1];
+        int numChar = 11;
+        char buffer[BootBlock.BPB_BytsPerSec];
         //offset2 = FirstDataSector * BootBlock.BPB_BytsPerSec + 32;
         CurrentDirectory += 32;
-        for (int i = 0; i < 5; i++)
+        do 
         {
-                fseek(imgFile, CurrentDirectory, SEEK_SET);
-                fread(buffer, sizeof(char), numChar, imgFile);
-                for (int j = 0; j < 11; j++)
+                // fseek(imgFile, CurrentDirectory, SEEK_SET);
+                // fread(buffer, sizeof(char), 1, imgFile);
+                read_sector(imgFile,CurrentDirectory, buffer);
+                printf("buffer = %s\n", buffer);
+                for (int j = 0; j < 12; j++)
                 {
                         if(buffer[j] == ' ')
                         {
                                 buffer[j] = '\0';
                         }
                 }
+
                 printf("searching for %s\n", token);
                 if(!strcmp(token, buffer))
                 {
                         printf("%s found\n", token);
-                        //should have moved the file pointer to the byte location that holds
-                        //the attribute, a check to make sure that the attribute = 10 is
-                        //necessary to avoid trying to cd into files that are not a directory.
-                        //not sure how to get the buffers to work. -Matt.
-                        //info for completeing cd is in OS Security video at timestamp 1:21:00
-                        fread(Attribute, sizeof(char), 1, imgFile);
-                        
+                        read_sector(imgFile, CurrentDirectory+11, buffer);
+                        //to get long file or shortfile -21
+                        if(buffer[0] == 0x10)
+                        {
+                                printf("is directory\n");
+                                short high;
+                                short low;
+                                read_sector(imgFile, CurrentDirectory+20, buffer);
+                                high = buffer;
+                                printf("buffer");
+                                printf("high = %d\n", high);
+                                read_sector(imgFile, CurrentDirectory+26, buffer);
+                                low = buffer;
+                                printf("bufferLow = %s\n", buffer);
+                                printf("low = %d\n", low);
+                                //int newDirectory = (firstDataSector + (("hi and lo concat" - 2) * BPB_SecPerClus) * BPB_BytsPerSec);
+                        }
+                        break;
+
                 }
+
                 // printf("location = %d\n", CurrentDirectory);
                 CurrentDirectory += 64;
-        }
-       
+        } while(buffer[0] != 0x00);
+        return CurrentDirectory;
+
 }
 
 int findUnusedCluster(FILE *fp, int startCluster) {
@@ -384,22 +434,7 @@ int findUnusedCluster(FILE *fp, int startCluster) {
         }
 }
 
-typedef struct DirectoryEntry {
-    char DIR_Name[11];
-    char DIR_Attr;
-    char DIR_NTRes;
-    char DIR_CrtTimeTenth;
-    short DIR_CrtTime;
-    short DIR_CrtDate;
-    short DIR_LstAccDate;
-    short DIR_FstClusHI;
-    short DIR_WrtTime;
-    short DIR_WrtDate;
-    short DIR_FstClusLO;
-    int unused[10];
-    int unused2[4];
-    int DIR_FileSize;
-};
+
 
 void createDirectoryEntry(FILE *fp, char *name, int start_cluster) {
     struct DirectoryEntry dir_entry = {0};
