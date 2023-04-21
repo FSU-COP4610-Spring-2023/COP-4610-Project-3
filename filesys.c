@@ -71,22 +71,17 @@ typedef struct __attribute__((packed)) {
 
 } FSInfo;
 
-typedef struct DirectoryEntry {
-    char DIR_Name[11];
-    char DIR_Attr;
-    char DIR_NTRes;
-    char DIR_CrtTimeTenth;
-    short DIR_CrtTime;
-    short DIR_CrtDate;
-    short DIR_LstAccDate;
-    short DIR_FstClusHI;
-    short DIR_WrtTime;
-    short DIR_WrtDate;
-    short DIR_FstClusLO;
-    int unused[10];
-    int unused2[4];
-    int DIR_FileSize;
-};
+typedef struct __attribute__((packed)){
+unsigned char DIR_Name[8]; // 8 bytes (1 byte read), this
+//representation is fine as it is character string.
+unsigned short DIR_FstClusHi; // 2 bytes (2 byte read), this
+//representation is in high word of first clus
+unsigned int DIR_FileSize; // 4 bytes (4 byte read), this
+//representation is size of file.
+unsigned short DIR_FstClusLo; // 2 bytes (2 byte read), this
+//representation is in low word of first clus.
+} DIR;
+
 
 // global variables
 FILE *imgFile;
@@ -95,7 +90,7 @@ FSInfo fsi;
 int FirstDataSector;
 CWD cwd;
 int CurrentDirectory;
-
+DIR directoryEnt;
 tokenlist * tokenize(char * input);
 void free_tokens(tokenlist * tokens);
 char * get_input();
@@ -159,11 +154,11 @@ int main(int argc, char * argv[]) {
                 }
                 else if(strcmp(tokens->items[0], "mkdir") == 0){
                         printf("calling mkdir\n");
-                        int startingCluster = findUnusedCluster(imgFile, FirstDataSector);
-                        //imgFile below this point in scope was fp, for the sake of compile testing
-                        //swapped to imgFile.
-                        createDirectoryEntry(imgFile, tokens->items[1], startingCluster);
-                        updateFatEntry(imgFile, startingCluster, 0xFFFFFFFF);
+                        // int startingCluster = findUnusedCluster(imgFile, FirstDataSector);
+                        // //imgFile below this point in scope was fp, for the sake of compile testing
+                        // //swapped to imgFile.
+                        // createDirectoryEntry(imgFile, tokens->items[1], startingCluster);
+                        // updateFatEntry(imgFile, startingCluster, 0xFFFFFFFF);
                 }
                 else if(strcmp(tokens->items[0], "rm") == 0){
                         printf("calling rm\n");
@@ -325,11 +320,47 @@ void read_sector(FILE* imgFile, unsigned int sector_number, void* buffer)
 
 }
 
-void dirEntryInit()
+void dirEntryInit(FILE* imgFile, unsigned int sector_number, void* buffer)
 {
+        fseek(imgFile, sector_number, SEEK_SET);
+        fread(&directoryEnt, BootBlock.BPB_BytsPerSec, 1, imgFile);
 
 
 }
+// int lsCmd(int Directory)
+// {
+//         //long offset2;
+//         int numChar = 11;
+//         char buffer[BootBlock.BPB_BytsPerSec];
+//         //offset2 = FirstDataSector * BootBlock.BPB_BytsPerSec + 32;
+//         Directory += 32;
+//         //int counter = 32;
+//         printf("buffer[0] = %d\n", buffer[0]);
+//         do 
+//         {
+//                 // fseek(imgFile, CurrentDirectory, SEEK_SET);
+//                 // fread(buffer, sizeof(char), 1, imgFile);
+//                 read_sector(imgFile,Directory, buffer);
+
+
+//                 for (int j = 0; j < 12; j++)
+//                 {
+//                         if(buffer[j] == ' ')
+//                         {
+//                                 buffer[j] = '\0';
+//                         }
+//                 }
+//                 printf("%s\n", buffer);
+//                 // printf("location = %d\n", CurrentDirectory);
+//                 Directory += 64;
+//                 //counter += 64;
+//         } while(buffer[0] != 0x00);
+//         return 1;
+        
+
+
+// }
+
 int lsCmd(int Directory)
 {
         //long offset2;
@@ -338,30 +369,27 @@ int lsCmd(int Directory)
         //offset2 = FirstDataSector * BootBlock.BPB_BytsPerSec + 32;
         Directory += 32;
         //int counter = 32;
+        int i = 0;
         printf("buffer[0] = %d\n", buffer[0]);
         do 
         {
                 // fseek(imgFile, CurrentDirectory, SEEK_SET);
                 // fread(buffer, sizeof(char), 1, imgFile);
-                read_sector(imgFile,Directory, buffer);
+                dirEntryInit(imgFile,Directory, buffer);
+                printf("Name is = %s\n", directoryEnt.DIR_Name);
 
-
-                for (int j = 0; j < 12; j++)
-                {
-                        if(buffer[j] == ' ')
-                        {
-                                buffer[j] = '\0';
-                        }
-                }
-                printf("%s\n", buffer);
                 // printf("location = %d\n", CurrentDirectory);
                 Directory += 64;
                 //counter += 64;
-        } while(buffer[0] != 0x00);
+                i++;
+        } while(i < 5);
         return 1;
         
 
 }
+
+
+
 
 int cdCmd(int CurrentDirectory, char* token)
 {
@@ -395,11 +423,11 @@ int cdCmd(int CurrentDirectory, char* token)
                                 short high;
                                 short low;
                                 read_sector(imgFile, CurrentDirectory+20, buffer);
-                                high = buffer;
-                                printf("buffer");
+                                high = buffer[0] + buffer[1];
+                                printf("buffer = %s\n", buffer);
                                 printf("high = %d\n", high);
                                 read_sector(imgFile, CurrentDirectory+26, buffer);
-                                low = buffer;
+                                low = (buffer[0]) | (buffer[1]);
                                 printf("bufferLow = %s\n", buffer);
                                 printf("low = %d\n", low);
                                 //int newDirectory = (firstDataSector + (("hi and lo concat" - 2) * BPB_SecPerClus) * BPB_BytsPerSec);
@@ -436,26 +464,26 @@ int findUnusedCluster(FILE *fp, int startCluster) {
 
 
 
-void createDirectoryEntry(FILE *fp, char *name, int start_cluster) {
-    struct DirectoryEntry dir_entry = {0};
-    strncpy(dir_entry.DIR_Name, name, strlen(name));
-    dir_entry.DIR_Attr = 0x10;
-    dir_entry.DIR_FstClusHI = (start_cluster & 0xFFFF0000) >> 16;
-    dir_entry.DIR_FstClusLO = start_cluster & 0x0000FFFF;
+// void createDirectoryEntry(FILE *fp, char *name, int start_cluster) {
+//     struct DirectoryEntry dir_entry = {0};
+//     strncpy(dir_entry.DIR_Name, name, strlen(name));
+//     dir_entry.DIR_Attr = 0x10;
+//     dir_entry.DIR_FstClusHI = (start_cluster & 0xFFFF0000) >> 16;
+//     dir_entry.DIR_FstClusLO = start_cluster & 0x0000FFFF;
 
-    // Need to write the new directory entry to the parent directory's cluster
-    // by calculating the offset of the new entry within the cluster
-    // and write the entry to that location - Nick
-}
+//     // Need to write the new directory entry to the parent directory's cluster
+//     // by calculating the offset of the new entry within the cluster
+//     // and write the entry to that location - Nick
+// }
 
-void updateFatEntry(FILE *fp, int cluster, int value) {
-    int fatOffset = cluster * 4;
-    int fatSector = BootBlock.BPB_RsvdSecCnt + (fatOffset / BootBlock.BPB_BytsPerSec);
-    int fatEntryOffset = fatOffset % BootBlock.BPB_BytsPerSec;
+// void updateFatEntry(FILE *fp, int cluster, int value) {
+//     int fatOffset = cluster * 4;
+//     int fatSector = BootBlock.BPB_RsvdSecCnt + (fatOffset / BootBlock.BPB_BytsPerSec);
+//     int fatEntryOffset = fatOffset % BootBlock.BPB_BytsPerSec;
 
-    fseek(fp, fatSector * BootBlock.BPB_BytsPerSec + fatEntryOffset, SEEK_SET);
-    fwrite(&value, 4, 1, fp);
-}
+//     fseek(fp, fatSector * BootBlock.BPB_BytsPerSec + fatEntryOffset, SEEK_SET);
+//     fwrite(&value, 4, 1, fp);
+// }
 
 
 
