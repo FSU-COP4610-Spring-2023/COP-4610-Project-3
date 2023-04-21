@@ -376,13 +376,15 @@ int lsCmd(int Directory)
                 // fseek(imgFile, CurrentDirectory, SEEK_SET);
                 // fread(buffer, sizeof(char), 1, imgFile);
                 dirEntryInit(imgFile,Directory, buffer);
+                if(directoryEnt.DIR_Name[0] != 0)
+                {
                 printf("Name is = %s\n", directoryEnt.DIR_Name);
-
+                }
                 // printf("location = %d\n", CurrentDirectory);
                 Directory += 64;
                 //counter += 64;
                 i++;
-        } while(i < 5);
+        } while(directoryEnt.DIR_Name[0] != 0);
         return 1;
         
 
