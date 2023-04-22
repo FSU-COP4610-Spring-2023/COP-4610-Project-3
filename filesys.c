@@ -91,6 +91,11 @@ unsigned int DIR_FileSize; // 4 bytes (4 byte read), this
 //representation is size of file.
 } DIR;
 
+typedef struct {
+	char fileName[11];
+	long int currentFilePosition;
+} OpenFile;
+
 
 // global variables
 FILE *imgFile;
@@ -99,9 +104,11 @@ FSInfo fsi;
 int FirstDataSector;
 CWD cwd;
 int CurrentDirectory;
+int CurrentFileCluster;
 unsigned int FirstFatSector;
 unsigned int BytesPerCluster;
 
+OpenFile OpenedFiles[10];
 //int Cluster = 2;
 tokenlist * tokenize(char * input);
 void free_tokens(tokenlist * tokens);
@@ -110,6 +117,7 @@ void add_token(tokenlist * tokens, char * item);
 void add_to_path(char * dir);
 int lsCmd(int);
 int cdCmd(int, char*);
+
 int main(int argc, char * argv[]) {
         // error checking for number of arguments.
         // read and open argv[1] in file pointer.
@@ -118,6 +126,7 @@ int main(int argc, char * argv[]) {
         imgFile = fopen(argv[1], "r+");
         fread(&BootBlock, sizeof(BPB_Block), 1, imgFile);
 
+//	OpenFile OpenedFiles[10];
 
         BytesPerCluster = BootBlock.BPB_BytsPerSec * BootBlock.BPB_SecPerClus;
         FirstDataSector = BootBlock.BPB_RsvdSecCnt + (BootBlock.BPB_NumberofFATS* BootBlock.BPB_FATSz32);
@@ -154,12 +163,12 @@ int main(int argc, char * argv[]) {
                         printf("calling ls\n");
                         int ls = 0;
                         ls = lsCmd(CurrentDirectory);
-                        
+//                        test();
                 }
                 else if(strcmp(tokens->items[0], "cd") == 0){
                         printf("calling cd\n");
                         if(tokens->items[1] != NULL )
-                        {                        
+                        {
                         CurrentDirectory = cdCmd(CurrentDirectory, tokens->items[1]);
                         }
                 }
@@ -171,7 +180,13 @@ int main(int argc, char * argv[]) {
                 }
                 else if(strcmp(tokens->items[0], "mkdir") == 0){
                         printf("calling mkdir\n");
-                        // int startingCluster = findUnusedCluster(imgFile, FirstDataSector);
+			int mkdirRes = mkdir(BootBlock, tokens->items[1]);
+                        if(mkdirRes == 0){
+				printf("Directory %s was created\n", tokens->items[1]);
+			}else if(mkdirRes == -1){
+				printf("Directory %s already exists\n", tokens->items[1]);
+			}
+			// int startingCluster = findUnusedCluster(imgFile, FirstDataSector);
                         // //imgFile below this point in scope was fp, for the sake of compile testing
                         // //swapped to imgFile.
                         // createDirectoryEntry(imgFile, tokens->items[1], startingCluster);
@@ -185,7 +200,9 @@ int main(int argc, char * argv[]) {
                 }
                 else if(strcmp(tokens->items[0], "open") == 0){
                         printf("calling open\n");
-                }
+			OpenCmd(tokens->items[1], tokens->items[2]);
+//                	test();
+		}
                 else if(strcmp(tokens->items[0], "close") == 0){
                         printf("calling close\n");
                 }
@@ -202,6 +219,47 @@ int main(int argc, char * argv[]) {
         }
 
         return 0;
+}
+
+int getHiLoClus(unsigned short hi, unsigned short lo){
+        hi = (hi << 8);
+        unsigned int concat = hi | lo;
+        return concat;
+}
+
+void OpenCmd(char* token1, char* token2){
+        int next_cluster = CurrentDirectory;
+
+        printf("Postion: %d\n", ftell(imgFile));
+        DIR entry;
+        int i;
+	int j = 0;
+        while(next_cluster < 0x0FFFFFF8) {
+          fseek(imgFile, ClusterByteOffset(next_cluster), SEEK_SET);
+          for(i = 0; i < (BytesPerCluster /32); i++) {
+                fread(&entry, sizeof(DIR), 1, imgFile);
+                if(entry.DIR_Attr == 0x20){
+			trim(entry.DIR_Name);
+			if(!strcmp(token1, entry.DIR_Name)){
+				strcpy(OpenedFiles[j].fileName, entry.DIR_Name);
+				CurrentFileCluster = 512*(getHiLoClus(entry.DIR_FstClusHi, entry.DIR_FstClusLo));
+				printf("CurrentFileCluster: %d\n", CurrentFileCluster);
+				char* buffer[8];
+				fseek(imgFile, CurrentFileCluster, SEEK_SET);
+				fread(buffer, sizeof(8), 1, imgFile);
+				printf("%s\n", buffer);
+				printf("current position: %d\nCurrentFileCluster: %d\n", ftell(imgFile), CurrentFileCluster);
+				j++;
+			}
+		}
+          }
+          next_cluster = GetNextCluster(next_cluster);
+	}
+/*	printf("opened files are:\n");
+	for(int i = 0; i < 10; i++){
+		printf("%s\n", OpenedFiles[i].fileName);
+	}
+*/
 }
 
 void Info(long offset){
@@ -363,6 +421,7 @@ void trim(char* ptr)
                 }
         }
 }
+
 int FatEntryOffset(int cluster)
 {
         int FatEntryOffset = (FirstFatSector * BootBlock.BPB_BytsPerSec) + (cluster * 4);
@@ -380,7 +439,7 @@ int GetNextCluster(int cluster)
 }
 
 int ClusterByteOffset(int cluster) {
-        int clus = (FirstDataSector + ((cluster - 2) * BootBlock.BPB_SecPerClus)) * BootBlock.BPB_BytsPerSec;
+	        int clus = (FirstDataSector + ((cluster - 2) * BootBlock.BPB_SecPerClus)) * BootBlock.BPB_BytsPerSec;
         printf("ByteOffsetOfCluster: %d\n", clus);
         return clus;
 }
@@ -446,13 +505,6 @@ int lsCmd(int Directory)
 
 }
 
-int getHiLoClus(unsigned short hi, unsigned short lo){
-        hi = (hi << 8);
-        unsigned int concat = hi | lo;
-        return concat;
-}
-
-
 int cdCmd(int CurrentDirectory, char* token)
 {
         int next_cluster = CurrentDirectory;
@@ -480,6 +532,7 @@ int cdCmd(int CurrentDirectory, char* token)
                         if(entry.DIR_Attr == 0x10){
                                 printf("is directory\n");
                                 CurrentDirectory = getHiLoClus(entry.DIR_FstClusHi, entry.DIR_FstClusLo);
+				add_to_path(token);
                                 //CurrentDirectory = FatEntryOffset(getHiLoClus(entry.DIR_FstClusHi, entry.DIR_FstClusLo));
                                 //printf("Current DIrectory: %d\n", CurrentDirectory);
                                 break;
@@ -541,6 +594,7 @@ int cdCmd(int CurrentDirectory, char* token)
 //                 CurrentDirectory += 64;
 //         } while(directoryEnt.DIR_Name[0] != 0);
 }
+
 
 // int findUnusedCluster(FILE *fp, int startCluster) {
 //         int fatOffset = startCluster * 4;
