@@ -93,7 +93,12 @@ unsigned int DIR_FileSize; // 4 bytes (4 byte read), this
 
 typedef struct {
 	char fileName[11];
-	long int currentFilePosition;
+	unsigned int currentFilePosition;
+	unsigned int currentFilePositionOffset;
+	int openedMethod;
+	unsigned int offset;
+	unsigned int fileSize;
+	char* filePath;
 } OpenFile;
 
 
@@ -107,6 +112,7 @@ int CurrentDirectory;
 int CurrentFileCluster;
 unsigned int FirstFatSector;
 unsigned int BytesPerCluster;
+int NumOpenFiles;
 
 OpenFile OpenedFiles[10];
 //int Cluster = 2;
@@ -126,14 +132,17 @@ int main(int argc, char * argv[]) {
         imgFile = fopen(argv[1], "r+");
         fread(&BootBlock, sizeof(BPB_Block), 1, imgFile);
 
-//	OpenFile OpenedFiles[10];
-
         BytesPerCluster = BootBlock.BPB_BytsPerSec * BootBlock.BPB_SecPerClus;
         FirstDataSector = BootBlock.BPB_RsvdSecCnt + (BootBlock.BPB_NumberofFATS* BootBlock.BPB_FATSz32);
         FirstFatSector = BootBlock.BPB_RsvdSecCnt; //offet
-        printf("FirstFatSector: %d\n", FirstFatSector);
-        printf("rsvdSec CNT%d\n", BootBlock.BPB_RsvdSecCnt);
+//        printf("FirstFatSector: %d\n", FirstFatSector);
+//        printf("rsvdSec CNT%d\n", BootBlock.BPB_RsvdSecCnt);
         add_to_path(argv[1]);
+
+	//set all files to unopened or 0
+	for(int i = 0; i < 10; i++){
+		OpenedFiles[i].openedMethod = 0;
+	}
 
         // parser
         char *input;
@@ -173,7 +182,7 @@ int main(int argc, char * argv[]) {
                         }
                 }
                 else if(strcmp(tokens->items[0], "size") == 0){
-                        printf("calling cd\n");
+			sizeCmd(tokens->items[1]);
                 }
                 else if(strcmp(tokens->items[0], "creat") == 0){
                         printf("calling creat\n");
@@ -201,11 +210,14 @@ int main(int argc, char * argv[]) {
                 else if(strcmp(tokens->items[0], "open") == 0){
                         printf("calling open\n");
 			OpenCmd(tokens->items[1], tokens->items[2]);
-//                	test();
 		}
                 else if(strcmp(tokens->items[0], "close") == 0){
                         printf("calling close\n");
+			closeCmd(tokens->items[1]);
                 }
+		else if(strcmp(tokens->items[0], "lsof") == 0){
+			lsofCmd();
+		}
                 else if(strcmp(tokens->items[0], "read") == 0){
                         printf("calling read\n");
                 }
@@ -233,33 +245,192 @@ void OpenCmd(char* token1, char* token2){
         printf("Postion: %d\n", ftell(imgFile));
         DIR entry;
         int i;
-	int j = 0;
+
+	if(NumOpenFiles == 10){
+		printf("Maximum files opened\n");
+		return;
+	}  //might need to be an else and put the while inside of it
+
+        while(next_cluster < 0x0FFFFFF8) {
+        	fseek(imgFile, ClusterByteOffset(next_cluster), SEEK_SET);
+        	for(i = 0; i < (BytesPerCluster /32); i++) {
+                	fread(&entry, sizeof(DIR), 1, imgFile);
+                	if(entry.DIR_Attr == 0x20){
+				//if(!strcmp(OpenedFiles[j].fileName, token1)){
+				//	printf("%s is already open\n", token1);
+				//	return;
+				//}
+				for(int k = 0; k < 10; k++){
+					if(!strcmp(OpenedFiles[k].fileName, token1)){
+                                        	printf("%s is already open\n", token1);
+                                        	return;
+                                	}
+					if(OpenedFiles[k].openedMethod == 0){  //only one that wa orinally i
+						trim(entry.DIR_Name);
+						if(!strcmp(token1, entry.DIR_Name)){
+							strcpy(OpenedFiles[k].fileName, entry.DIR_Name);
+							OpenedFiles[k].currentFilePosition = getHiLoClus(entry.DIR_FstClusHi, entry.DIR_FstClusLo);
+							if(OpenedFiles[k].currentFilePosition == 0){
+								OpenedFiles[k].currentFilePosition = BootBlock.BPB_RootClus;
+								//OpenedFiles[j].currentFilePositionOffset = cwd offset idk whta value that is
+							}
+							OpenedFiles[k].currentFilePositionOffset = ClusterByteOffset(OpenedFiles[k].currentFilePosition);
+							if(!strcmp(token2, "-r")){
+								OpenedFiles[k].openedMethod = 1;
+							}
+							if(!strcmp(token2, "-w")){
+                                        	        	OpenedFiles[k].openedMethod = 2;
+                                        		}
+							if(!strcmp(token2, "-rw")){
+                                                		OpenedFiles[k].openedMethod = 3;
+                                        		}
+							if(!strcmp(token2, "-wr")){
+                                                		OpenedFiles[k].openedMethod = 4;
+                                        		}
+							OpenedFiles[k].fileSize = entry.DIR_FileSize;
+							OpenedFiles[k].offset = 0;
+							OpenedFiles[k].filePath = cwd.path;
+							printf("opened %s\n", OpenedFiles[k].fileName);
+							NumOpenFiles += 1;
+							break;
+						}
+					}
+				}
+			}
+	//}
+        	}
+        	next_cluster = GetNextCluster(next_cluster);
+	}
+	printf("opened files are:\n");
+	for(int i = 0; i < 10; i++){
+		printf("%s\n", OpenedFiles[i].fileName);
+	}
+	printf("NumOpenFiles is %d\n", NumOpenFiles);
+	return;
+}
+
+void closeCmd(char* token){
+        int next_cluster = CurrentDirectory;
+
+
+        printf("Postion: %d\n", ftell(imgFile));
+        DIR entry;
+        int i;
         while(next_cluster < 0x0FFFFFF8) {
           fseek(imgFile, ClusterByteOffset(next_cluster), SEEK_SET);
           for(i = 0; i < (BytesPerCluster /32); i++) {
                 fread(&entry, sizeof(DIR), 1, imgFile);
-                if(entry.DIR_Attr == 0x20){
-			trim(entry.DIR_Name);
-			if(!strcmp(token1, entry.DIR_Name)){
-				strcpy(OpenedFiles[j].fileName, entry.DIR_Name);
-				CurrentFileCluster = 512*(getHiLoClus(entry.DIR_FstClusHi, entry.DIR_FstClusLo));
-				printf("CurrentFileCluster: %d\n", CurrentFileCluster);
-				char* buffer[8];
-				fseek(imgFile, CurrentFileCluster, SEEK_SET);
-				fread(buffer, sizeof(8), 1, imgFile);
-				printf("%s\n", buffer);
-				printf("current position: %d\nCurrentFileCluster: %d\n", ftell(imgFile), CurrentFileCluster);
-				j++;
+		for(int j = 0; j < 10; j++){
+			if(!strcmp(token, OpenedFiles[j].fileName)){
+				if(OpenedFiles[j].openedMethod == 0){
+					printf("file is not open \n");
+					return;
+				}else{
+					OpenedFiles[j].openedMethod = 0;
+					printf("%s closed\n", OpenedFiles[j].fileName);
+					NumOpenFiles--;
+					printf("opened files are:\n");
+        				for(int i = 0; i < 10; i++){
+						if(OpenedFiles[i].openedMethod != 0){
+                					printf("%s\n", OpenedFiles[i].fileName);
+						}else{
+							printf("\n");
+						}
+        				}
+        				printf("NumOpenFiles is %d\n", NumOpenFiles);
+					return;
+				}
 			}
 		}
           }
           next_cluster = GetNextCluster(next_cluster);
+        }
+
+	//needs to be a check to see if the file is in the curent working dircetory 
+}
+
+void lsofCmd(){
+	if(NumOpenFiles == 0){
+		printf("No files are opened right now\n");
+		return;
+	}else{
+		printf("INDEX NAME      MODE      OFFSET      PATH\n");
+		for(int i = 0; i < 10; i++){
+			if(OpenedFiles[i].openedMethod != 0){
+				if(OpenedFiles[i].openedMethod == 1){					//if file was opened in read
+					printf("%-6d%-10s%-10s%-12d%-s\n", i, OpenedFiles[i].fileName, "r", 
+						OpenedFiles[i].offset, OpenedFiles[i].filePath);
+				}
+				if(OpenedFiles[i].openedMethod == 2){					//if file was oopened in write
+					printf("%-6d%-10s%-10s%-12d%-s\n", i, OpenedFiles[i].fileName, "w", 
+						OpenedFiles[i].offset, OpenedFiles[i].filePath);
+				}
+				if(OpenedFiles[i].openedMethod == 3){					//if file opened in read write
+					printf("%-6d%-10s%-10s%-12d%-s\n", i, OpenedFiles[i].fileName, "rw", 
+						OpenedFiles[i].offset, OpenedFiles[i].filePath);
+				}
+				if(OpenedFiles[i].openedMethod == 4){					//if file opened in write read
+					printf("%-6d%-10s%-10s%-12d%-s\n", i, OpenedFiles[i].fileName, "wr", 
+						OpenedFiles[i].offset, OpenedFiles[i].filePath);
+				}
+			}
+		}
 	}
-/*	printf("opened files are:\n");
-	for(int i = 0; i < 10; i++){
-		printf("%s\n", OpenedFiles[i].fileName);
-	}
-*/
+}
+
+void sizeCmd(char* token){
+        int next_cluster = CurrentDirectory;
+
+        printf("Postion: %d\n", ftell(imgFile));
+        DIR entry;
+        int i;
+        while(next_cluster < 0x0FFFFFF8) {
+          fseek(imgFile, ClusterByteOffset(next_cluster), SEEK_SET);
+          for(i = 0; i < (BytesPerCluster /32); i++) {
+                fread(&entry, sizeof(DIR), 1, imgFile);
+		trim(entry.DIR_Name);
+		if(!strcmp(entry.DIR_Name, token)){
+			if(entry.DIR_Attr == 0x20){ 
+				//&& !strcmp(token, entry.DIR_Name)){
+				printf("%d %s\n", entry.DIR_FileSize, entry.DIR_Name);
+				return;
+			}
+		}
+          }
+          next_cluster = GetNextCluster(next_cluster);
+        }
+
+	//printf("%s is a directory\n", entry.DIR_Name);
+
+	//need error checking for if file not found unsure of how to do that bc line above doesnt work
+}
+
+void lseekCmd(vchar* token, int o){
+        int next_cluster = CurrentDirectory;
+
+        DIR entry;
+        int i;
+        while(next_cluster < 0x0FFFFFF8) {
+          fseek(imgFile, ClusterByteOffset(next_cluster), SEEK_SET);
+          for(i = 0; i < (BytesPerCluster /32); i++) {
+                fread(&entry, sizeof(DIR), 1, imgFile);
+		trim(enry.DIR_Name);
+		if(!strcmp(entry.DIR_Name, token){
+			for(int i = 0; i < 10; i++){
+				if(!strcmp(entry.DIR_Name, OpenedFiles[i].fileName) && OpenedFiles[i].openedMethod == 0){
+					printf("%s must be opened to lseek\n", OpenedFiles[i].fileName);
+					return;
+				}
+				if(!strcmp(entry.DIR_Name, OpenedFiles[i].fileName) && OpenedFiles[i].openedMethod != 0){
+					OpenedFiles[i].offset = o;
+				}
+			}
+		}
+          }
+          next_cluster = GetNextCluster(next_cluster);
+        }
+
+	//need error checking the same as the other functions
 }
 
 void Info(long offset){
@@ -528,9 +699,9 @@ int cdCmd(int CurrentDirectory, char* token)
                 //CurrentDirectory = FatEntryOffset(getHiLoClus(entry.DIR_FstClusHi, entry.DIR_FstClusLo));
                 trim(entry.DIR_Name);
                 if(!strcmp(token, entry.DIR_Name)){
-                        printf("%s found\n", token);
+//                        printf("%s found\n", token);
                         if(entry.DIR_Attr == 0x10){
-                                printf("is directory\n");
+//                                printf("is directory\n");
                                 CurrentDirectory = getHiLoClus(entry.DIR_FstClusHi, entry.DIR_FstClusLo);
 				add_to_path(token);
                                 //CurrentDirectory = FatEntryOffset(getHiLoClus(entry.DIR_FstClusHi, entry.DIR_FstClusLo));
