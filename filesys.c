@@ -696,6 +696,11 @@ char * get_input() {
         return buf;
 }
 
+void mkdir()
+{
+
+}
+
 // void read_sector(FILE* imgFile, unsigned int sector_number, void* buffer)
 // {
 //         //printf("location = %u\n", sector_number);
@@ -771,6 +776,10 @@ int cdCmd(int CurrentDirectory, char* token)
                 if(!strcmp(token, entry.DIR_Name)){
                         if(entry.DIR_Attr == 0x10){
                                 CurrentDirectory = getHiLoClus(entry.DIR_FstClusHi, entry.DIR_FstClusLo);
+                                if(CurrentDirectory == 0)
+                                {
+                                        CurrentDirectory = BootBlock.BPB_RootClus;
+                                }
 				add_to_path(token);
                                 //CurrentDirectory = FatEntryOffset(getHiLoClus(entry.DIR_FstClusHi, entry.DIR_FstClusLo));
                                 break;
