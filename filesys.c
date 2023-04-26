@@ -300,10 +300,29 @@ int GetNextCluster(int cluster)
 
 int ClusterByteOffset(int cluster) {
         int clus = (FirstDataSector + ((cluster - 2) * BootBlock.BPB_SecPerClus)) * BootBlock.BPB_BytsPerSec;
-        //printf("ByteOffsetOfCluster: %d\n", clus);
         return clus;
 }
 
+int BackToFat(int cluster){
+	int next_cluster = (FatEntryOffset(cluster)) + 4;			//lol
+//	printf("next_cluster: %d\n", next_cluster);
+//	printf("test 1\n");
+	fseek(imgFile, next_cluster, SEEK_SET);
+//	printf("test 2\n");
+	int next_chain;
+	fread(&next_chain, sizeof(int), 1, imgFile);
+//	int test = ClusterByteOffset(*next_chain);
+//	printf("test: %d\n", test);
+//	printf("next_chain: %d\n", next_chain);
+//	printf("test 3\n");
+	if(next_chain < 0x0FFFFFF8){
+		printf("test 4\n");
+		return next_chain;;
+	}else{
+		printf("test 5\n");
+		return 0;
+	}
+}
 
 void OpenCmd(char* token1, char* token2){
         int next_cluster = CurrentDirectory;
@@ -524,7 +543,75 @@ void readCmd(char* token, unsigned int token2){
                                                         printf("File not opened. must be opened in -r -rw or -wr mode\n");
                                                         break;
                                                 }
-                                                int next_file_cluster = GetNextCluster(next_file_cluster);
+
+						if(token2 >= OpenedFiles[i].fileSize){
+
+						fseek(imgFile, OpenedFiles[i].currentFilePositionOffset, SEEK_SET);
+						for(int j = 0; j < BytesPerCluster; j++){
+							char byte = fgetc(imgFile);
+							printf("%c", byte);
+						}
+						int back = BackToFat(OpenedFiles[i].currentFilePosition);
+						while(back != 0){
+							fseek(imgFile, ClusterByteOffset(back), SEEK_SET);
+							for(int j = 0; j < BytesPerCluster; j++){
+                                                        	char byte = fgetc(imgFile);
+                                                        	printf("%c", byte);
+                                                	}
+							back = BackToFat(back);
+						}
+						return;
+						}else{
+							boolean end = false;
+							int counter = 0;
+							for(int k = 0; k < token2; k++){
+								fseek(imgFile, OpenedFiles[i].currentFilePositionOffset, SEEK_SET);
+                                                		for(int j = 0; j < BytesPerCluster; j++){
+                                                        		char byte = fgetc(imgFile);
+                                                        		printf("%c", byte);
+                                                			counter++;
+								}
+                                                		int back = BackToFat(OpenedFiles[i].currentFilePosition);
+                                                		while(back != 0){
+                                                        		fseek(imgFile, ClusterByteOffset(back), SEEK_SET);
+                                                        		for(int j = 0; j < counter; j++){
+                                               					counter++;
+										char byte = fgetc(imgFile);
+                                                                		printf("%c", byte);
+                                                        		}
+                                                        		back = BackToFat(back);
+                                                		}
+                                                		return;
+							}
+						}
+
+/*
+//						printf("Location we are jumping to: %d\n",  OpenedFiles[i].currentFilePositionOffset);
+						fseek(imgFile, OpenedFiles[i].currentFilePositionOffset, SEEK_SET);
+						int counter = 0;
+						do{
+							for(int j = 0; j < BytesPerCluster; j++){
+								char test = fgetc(imgFile);
+								printf("%c", test);
+								if(counter == token2){
+									break;
+								}
+//								printf("offset is: %d\n", OpenedFiles[i].offset);
+//								printf("current location: %d\n", BackToFat(next_cluster));
+								counter++;
+							}
+							if(BackToFat(next_cluster) == 0){
+	                                                	break;
+	                                                }else{
+	                                                        fseek(imgFile, BackToFat(next_cluster), SEEK_SET);
+       		                                        }
+                                                	counter++;
+						}while(BackToFat(next_cluster) != 0);
+						printf("\n");
+						return;
+*/
+
+/*                                              int next_file_cluster = GetNextCluster(next_file_cluster);
 
                                                 if(OpenedFiles[i].fileSize / 512 == 0){
                                                         char buffer[BytesPerCluster];
@@ -544,24 +631,10 @@ void readCmd(char* token, unsigned int token2){
                                                         return;
                                                         //files is multiple clusters
                                                 }
-/*                                              printf("next_file_cluster: %d\n", next_file_cluster);
-                                                fseek(imgFile, OpenedFiles[i].currentFilePositionOffset, SEEK_SET);
-                                                printf("OpenedFiles[i].currentFilePositionOffset: %d\n", OpenedFiles[i].currentFilePositionOffset);
-                                                while(next_file_cluster < 0x0FFFFFF8){
-                                                        printf("next cluster is at: %d\n", ClusterByteOffset(next_file_cluster));
-//                                                      printf("file position: %d\n", OpenedFiles[i].currentFilePositionOffset);
-                                                        char buffer[BytesPerCluster];
-//                                                      printf("file size%d\n", OpenedFiles[i].fileSize);
-                                                        fread(buffer, sizeof(char), BytesPerCluster, imgFile);
-                                                        printf("buffer: %s\n", buffer);
-                                                        fseek(imgFile, ClusterByteOffset(next_file_cluster), SEEK_SET);
-//                                                      unsigned int clus;
-//                                                      fread(&, sizeof(unsigned int), 1, imgFile);
-//                                                      printf("%d", clus);
                                                         next_file_cluster = GetNextCluster(next_file_cluster);
                                                         printf("next cluster is at: %d\n", ClusterByteOffset(next_file_cluster));
-                                                }*/
-                                                return;
+                                                }
+                                                return;*/
                                         }
                                 }
                                 break;
