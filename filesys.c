@@ -316,10 +316,10 @@ int BackToFat(int cluster){
 //	printf("next_chain: %d\n", next_chain);
 //	printf("test 3\n");
 	if(next_chain < 0x0FFFFFF8){
-		printf("test 4\n");
+		//printf("test 4\n");
 		return next_chain;;
 	}else{
-		printf("test 5\n");
+		//printf("test 5\n");
 		return 0;
 	}
 }
@@ -562,22 +562,27 @@ void readCmd(char* token, unsigned int token2){
 						}
 						return;
 						}else{
-							boolean end = false;
+							//boolean end = false;
 							int counter = 0;
-							for(int k = 0; k < token2; k++){
+							while (counter < token2){
 								fseek(imgFile, OpenedFiles[i].currentFilePositionOffset, SEEK_SET);
                                                 		for(int j = 0; j < BytesPerCluster; j++){
                                                         		char byte = fgetc(imgFile);
                                                         		printf("%c", byte);
                                                 			counter++;
+                                                                        if(!(counter < token2))
+                                                                        {return;}
 								}
                                                 		int back = BackToFat(OpenedFiles[i].currentFilePosition);
                                                 		while(back != 0){
                                                         		fseek(imgFile, ClusterByteOffset(back), SEEK_SET);
-                                                        		for(int j = 0; j < counter; j++){
-                                               					counter++;
+                                                        		for(int j = 0; j < BytesPerCluster; j++){
+                                               					
 										char byte = fgetc(imgFile);
                                                                 		printf("%c", byte);
+                                                                                counter++;
+                                                                                if(!(counter < token2))
+                                                                                {return;}
                                                         		}
                                                         		back = BackToFat(back);
                                                 		}
