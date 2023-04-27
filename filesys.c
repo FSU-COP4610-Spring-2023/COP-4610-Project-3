@@ -131,7 +131,10 @@ void lseekCmd(char*, unsigned int);
 void Info(long);
 void readCmd(char *, unsigned int);
 void renameCmd(char *, char* );
-void findFile(int);
+//void findFile(int);
+void creat(char*);
+int findFile(char*);
+
 
 int main(int argc, char * argv[]) {
         // error checking for number of arguments.
@@ -193,6 +196,7 @@ int main(int argc, char * argv[]) {
                 }
                 else if(strcmp(tokens->items[0], "creat") == 0){
                         printf("calling creat\n");
+                        creat(tokens->items[1]);
                 }
                 else if(strcmp(tokens->items[0], "mkdir") == 0){
                         printf("calling mkdir\n");
@@ -599,7 +603,7 @@ void readCmd(char* token, unsigned int token2){
         }
 }
 
-int FindFile(char* file){
+int findFile(char* file){
         int next_cluster = CurrentDirectory;
 
         DIR entry;
@@ -830,10 +834,6 @@ void mkdir(char* token)
         }
         next_cluster = GetNextCluster(next_cluster);   
         }
-        
-        
-
-
 }
 
 // void read_sector(FILE* imgFile, unsigned int sector_number, void* buffer)
@@ -1142,6 +1142,55 @@ void rmDir(char * token)
         //}
 //
   //      return CurrentDirectory;
+}
+
+void creat(char* filename) {
+        // Check if file/directory already exists
+        if (findFile(filename) == 1) 
+        {
+                printf("Error: File/Directory already exists\n");
+                return;
+        }
+        // Create new file
+        int next_cluster = CurrentDirectory;
+        DIR newEntry;
+        DIR entry;
+        char fileName[11];
+        for (int i =0; i < 11; i++)
+        {
+                newEntry.DIR_Name[i] = filename[i];
+        }
+        newEntry.DIR_Attr = 0x20;
+        newEntry.DIR_NTRes =0;
+        newEntry.DIR_CrtTimeTenth=0;
+        newEntry.DIR_CrtTime=0;
+        newEntry.DIR_CrtDate=0;
+        newEntry.DIR_LstAccDate=0;
+        newEntry.DIR_FstClusHi=0; 
+        newEntry.DIR_WrtTime=0;
+        newEntry.DIR_WrtDate=0;
+        newEntry.DIR_FstClusLo = 0; 
+        newEntry.DIR_FileSize = 0; 
+        while (next_cluster < 0x0FFFFFF8)
+        {
+                fseek(imgFile, ClusterByteOffset(next_cluster), SEEK_SET);
+                for(int i = 0; i < (BytesPerCluster /32); i++) 
+                {
+                        int newDirLoc = ftell(imgFile);
+                        fread(&entry, sizeof(DIR), 1, imgFile);
+                        if(entry.DIR_Attr == 0x0F)
+                        {
+                                continue;    
+                        }
+                        if(entry.DIR_Name[0] == 0 || entry.DIR_Name[0] == 0xE5) //5e or e5?
+                        {
+                                fseek(imgFile, newDirLoc, SEEK_SET);
+                                fwrite(&newEntry, sizeof(DIR), 1, imgFile);
+                                break;
+                        }             
+                }
+                next_cluster = GetNextCluster(next_cluster);   
+        }
 }
 
 
