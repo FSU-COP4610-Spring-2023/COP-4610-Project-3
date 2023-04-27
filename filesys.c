@@ -798,9 +798,9 @@ void mkdir(char* token)
         char fileName[11];
         for (int i =0; i < 11; i++)
         {
-                newEntry.DIR_Name[i] = token;
+                newEntry.DIR_Name[i] = token[i];
         }
-        newEntry.DIR_Attr = 0x0F;
+        newEntry.DIR_Attr = 0x10;
         newEntry.DIR_NTRes =0;
         newEntry.DIR_CrtTimeTenth=0;
         newEntry.DIR_CrtTime=0;
@@ -813,7 +813,19 @@ void mkdir(char* token)
         newEntry.DIR_FileSize = 0; 
         while (next_cluster < 0x0FFFFFF8)
         {
+                fseek(imgFile, ClusterByteOffset(next_cluster), SEEK_SET);
         for(int i = 0; i < (BytesPerCluster /32); i++) {
+                int newDirLoc = ftell(imgFile);
+                fread(&entry, sizeof(DIR), 1, imgFile);
+                if(entry.DIR_Attr == 0x0F){
+                    continue;    
+                }
+                if(entry.DIR_Name[0] == 0 || entry.DIR_Name[0] == 0xE5) //5e or e5?
+                {
+                        fseek(imgFile, newDirLoc, SEEK_SET);
+                        fwrite(&newEntry, sizeof(DIR), 1, imgFile);
+                        break;
+                }
                 
         }
         next_cluster = GetNextCluster(next_cluster);   
