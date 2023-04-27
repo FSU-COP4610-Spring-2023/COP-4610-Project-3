@@ -333,6 +333,24 @@ int BackToFat(int cluster){
 	}
 }
 
+int allocateClus(cluster)
+{
+        int value;
+        int* ptr = &value;
+        int ctr;
+        fseek(imgFile, FatEntryOffset(cluster), SEEK_SET);
+        do{
+                fread(ptr, sizeof(int), 1, imgFile);
+                ctr++;
+                
+
+        }while(*ptr != 0);
+        fseek(imgFile, ftell(imgFile)-4, SEEK_SET);
+        printf("ftell = %d\n", ftell(imgFile));
+
+        return ctr;
+}
+
 void OpenCmd(char* token1, char* token2){
         int next_cluster = CurrentDirectory;
 
@@ -809,7 +827,7 @@ void mkdir(char* token)
         newEntry.DIR_FstClusHi=0; 
         newEntry.DIR_WrtTime=0;
         newEntry.DIR_WrtDate=0;
-        newEntry.DIR_FstClusLo = 0; 
+        newEntry.DIR_FstClusLo = allocateClus(CurrentDirectory); 
         newEntry.DIR_FileSize = 0; 
         while (next_cluster < 0x0FFFFFF8)
         {
