@@ -132,6 +132,7 @@ void Info(long);
 void readCmd(char *, unsigned int);
 void renameCmd(char *, char* );
 void findFile(int);
+void writeCmd(char* , char*);
 
 int main(int argc, char * argv[]) {
         // error checking for number of arguments.
@@ -259,7 +260,13 @@ int main(int argc, char * argv[]) {
 			}
                 }
                 else if(strcmp(tokens->items[0], "write") == 0){
-                        printf("calling write\n");
+                        if(tokens->items[1] == NULL){
+                                printf("Enter a valid filename\n");
+                        }else if(tokens->items[2] == NULL){
+                                printf("Enter a valid value to write into the file\n");
+                        }else{
+                                writeCmd(tokens->items[1], tokens->items[2]);
+                        }
                 }
 		else if(strcmp(tokens->items[0], "rename") == 0){
 			printf("calling rename\n");
@@ -558,7 +565,7 @@ void readCmd(char* token, unsigned int token2){
 
 						if(token2 >= OpenedFiles[i].fileSize){
 
-						fseek(imgFile, OpenedFiles[i].currentFilePositionOffset, SEEK_SET);
+						fseek(imgFile, OpenedFiles[i].currentFilePositionOffset + OpenedFiles[i].offset, SEEK_SET);
 						for(int j = 0; j < BytesPerCluster; j++){
 							char byte = fgetc(imgFile);
 							printf("%c", byte);
@@ -580,7 +587,7 @@ void readCmd(char* token, unsigned int token2){
 							//boolean end = false;
 							int counter = 0;
 							while (counter < token2){
-								fseek(imgFile, OpenedFiles[i].currentFilePositionOffset, SEEK_SET);
+								fseek(imgFile, OpenedFiles[i].currentFilePositionOffset + OpenedFiles[i].offset, SEEK_SET);
                                                 		for(int j = 0; j < BytesPerCluster; j++){
                                                         		char byte = fgetc(imgFile);
                                                         		printf("%c", byte);
@@ -681,6 +688,42 @@ void renameCmd(char * token1, char* token2){
           	}
           	next_cluster = GetNextCluster(next_cluster);
         }
+}
+
+void writeCmd(char* token1, char* token2){
+        int next_cluster = CurrentDirectory;
+
+        DIR entry;
+        int i;
+        while(next_cluster < 0x0FFFFFF8) {
+                fseek(imgFile, ClusterByteOffset(next_cluster), SEEK_SET);
+                for(i = 0; i < (BytesPerCluster /32); i++) {
+                        fread(&entry, sizeof(DIR), 1, imgFile);
+                        trim(entry.DIR_Name);
+                        if(entry.DIR_Attr == 0x20){
+                                if(!strcmp(entry.DIR_Name, token1)){
+                                        for(int j = 0; j < 10; j++){
+                                                if(!strcmp(OpenedFiles[j].fileName, entry.DIR_Name)){
+                                                        if(OpenedFiles[j].openedMethod == 1){
+                                                                printf("file %s cannot be written to in read (r) mode\n", OpenedFiles[j].fileName);
+                                                                return;
+                                                        }else if(OpenedFiles[j].openedMethod == 0){
+                                                                printf("file %s must be opened to write to\n", OpenedFiles[j].fileName);
+                                                                return;
+                                                        }else{
+                                                                printf("writing to %s in -w mode\n", OpenedFiles[j].fileName);
+                                                                return;
+                                                        }
+                                                }
+                                        }
+                                        printf("file has not been opened\n");
+                                        return;
+                                }
+                        }
+                }
+                next_cluster = GetNextCluster(next_cluster);
+        }
+        printf("file %s is not in the current directory\n", token1);
 }
 
 void Info(long offset){
