@@ -210,7 +210,10 @@ int main(int argc, char * argv[]) {
                         printf("calling rm\n");
                 }
                 else if(strcmp(tokens->items[0], "rmdir") == 0){
-                        printf("calling rmdir\n");
+                        if(tokens->items[1] != NULL)
+                        {
+                                rmDir(tokens->items[1]);
+                        }
                 }
                 else if(strcmp(tokens->items[0], "open") == 0){
 			printf("calling opencommand\ntoken 2: %s\n", tokens->items[2]);
@@ -820,7 +823,7 @@ int lsCmd(int Directory)
                 if(entry.DIR_Attr == 0x0F){
                     continue;    
                 }
-                if(entry.DIR_Name[0] == 0 || entry.DIR_Name[0] == 0xE5)
+                if(entry.DIR_Name[0] == 0 || entry.DIR_Name[0] == 0x5E) //5e or e5?
                 {
                         continue;
                 }
@@ -839,7 +842,8 @@ int cdCmd(int CurrentDirectory, char* token)
 
         DIR entry;
         int i;
-        //while(next_cluster <= 0x0FFFFFF8) {
+        while(next_cluster < 0x0FFFFFF8) {
+                fseek(imgFile, ClusterByteOffset(next_cluster), SEEK_SET);
         for(i = 0; i < (BytesPerCluster /32); i++) {
                 fread(&entry, sizeof(DIR), 1, imgFile);
                 if(entry.DIR_Attr == 0x0F){                             					//if longfgile ignore
@@ -865,6 +869,8 @@ int cdCmd(int CurrentDirectory, char* token)
                                 printf("%s not a directory\n", token);
                         }
                 }
+        }
+          next_cluster = GetNextCluster(next_cluster);
         }
 
         return CurrentDirectory;
@@ -921,6 +927,173 @@ int cdCmd(int CurrentDirectory, char* token)
 }
 
 
+
+void rmDir(char * token)
+{
+       //printf("current Directory = %d\n", ClusterByteOffset(CurrentDirectory));
+        CurrentDirectory = cdCmd(CurrentDirectory, token);
+       //printf("current Directory = %d\n", ClusterByteOffset(CurrentDirectory));
+        int next_cluster = CurrentDirectory;
+
+
+//        printf("Postion: %d\n", ftell(imgFile));
+        DIR entry;
+        int i;
+        char trueFalse = 'f';
+        while(next_cluster < 0x0FFFFFF8) {
+          fseek(imgFile, ClusterByteOffset(next_cluster), SEEK_SET);
+          for(i = 0; i < (BytesPerCluster /32); i++) {
+                fread(&entry, sizeof(DIR), 1, imgFile);
+                if(entry.DIR_Attr == 0x0F){
+                    continue;    
+                }
+                if(entry.DIR_Name[0] == 0 || entry.DIR_Name[0] == 0x5E) //5E or E5
+                {
+                        continue;
+                }
+                //printf("%c\n", entry.DIR_Name[0]);
+                if(entry.DIR_Name[0] != 0x2E)
+                {
+                        trueFalse = 't';
+                        break;
+                }
+
+          }
+          next_cluster = GetNextCluster(next_cluster);
+        }
+        if(trueFalse == 'f')
+        {
+                
+                fseek(imgFile, FatEntryOffset(CurrentDirectory), SEEK_SET);
+                //printf("fat location: %d\n", FatEntryOffset(CurrentDirectory));
+                int zeroVar;
+                int* zero = &zeroVar;
+                *zero = 0x00000000;
+                // fread(zero, sizeof(char), 4, imgFile);
+                // printf("fat entry = %d\n", *zero);
+                // fseek(imgFile, FatEntryOffset(CurrentDirectory), SEEK_SET);
+                fwrite(zero, sizeof(int), 1, imgFile);
+                fseek(imgFile, FatEntryOffset(CurrentDirectory), SEEK_SET);
+                fread(zero, sizeof(char), 4, imgFile);
+                //printf("fat entry = %d\n", *zero);
+                fseek(imgFile,  ClusterByteOffset(CurrentDirectory), SEEK_SET);
+                //printf("current location = %d\n", ClusterByteOffset(CurrentDirectory));
+                fseek(imgFile,  ClusterByteOffset(CurrentDirectory), SEEK_SET);
+                //printf("location = %d\n", ClusterByteOffset(CurrentDirectory));
+                CurrentDirectory = cdCmd(CurrentDirectory, "..");
+                int previousDirectory = CurrentDirectory;
+                fseek(imgFile, ClusterByteOffset(CurrentDirectory), SEEK_SET);
+                //printf("current location = %d\n", ClusterByteOffset(CurrentDirectory));
+                while(CurrentDirectory < 0x0FFFFFF8) {
+                fseek(imgFile, ClusterByteOffset(CurrentDirectory), SEEK_SET);
+                for(i = 0; i < (BytesPerCluster /32); i++) {
+                        int NameAddress = ftell(imgFile);
+                        //printf("ftell = %d\n", ftell(imgFile));
+                        fread(&entry, sizeof(DIR), 1, imgFile);
+                        if(entry.DIR_Attr == 0x0F){                             					//if longfgile ignore
+                                continue;
+                        }
+                        if(entry.DIR_Name[0] == 0 || entry.DIR_Name[0] == 0x5E) 					//if deleted entry ignore
+                        {
+                                continue;
+                        }
+                        // if(GetNextCluster(CurrentDirectory) < 0x0FFFFFF8)
+                        // {
+                        //         entry.DIR_Name[0] = 0x5E;
+                        //         printf("%d\n", entry.DIR_Name[0]);
+                        // }
+                        // else{
+                        //         entry.DIR_Name[0] = 0x00;
+                        //         printf("%d\n", entry.DIR_Name[0]);
+                        // }
+                        trim(entry.DIR_Name);
+                        //printf("token = %s", token);
+                        //printf("DirName = %s", entry.DIR_Name);
+                        if(!strcmp(token, entry.DIR_Name)){
+                                //printf("directory found");
+                                //printf("location = %d\n", ClusterByteOffset(CurrentDirectory));
+                                if(entry.DIR_Attr == 0x10){
+                                        // CurrentDirectory = getHiLoClus(entry.DIR_FstClusHi, entry.DIR_FstClusLo);
+                                        // if(CurrentDirectory == 0)
+                                        // {
+                                        //         CurrentDirectory = BootBlock.BPB_RootClus;
+                                        // }
+                                        //cdCmd(CurrentDirectory, token);
+                                        //printf("location = %d\n", ClusterByteOffset(CurrentDirectory));
+                                        char deleteVar;
+                                        char* delete = &deleteVar;
+                                        *delete = 0x5E;
+                                        if(GetNextCluster(CurrentDirectory) < 0x0FFFFFF8)
+                                        {
+                                                //printf("DirName = %s\n", entry.DIR_Name);
+                                                fseek(imgFile, NameAddress, SEEK_SET);
+                                                //printf("location = %d\n", ftell(imgFile));
+                                                entry.DIR_Name[0] = 0x5E;
+                                                fwrite(delete, sizeof(char), 1, imgFile);
+                                                //printf("%d\n", entry.DIR_Name[0]);
+                                                //printf("DirName = %s\n", entry.DIR_Name);
+
+                                        }
+                                        else{
+                                                fseek(imgFile,NameAddress, SEEK_SET);
+                                                entry.DIR_Name[0] = 0x00;
+                                                fwrite(delete, sizeof(char), 1, imgFile);
+                                                //printf("%d\n", entry.DIR_Name[0]);
+
+                                        }
+                                        break;
+                                }
+                                else{
+                                }
+            
+                        }
+                }
+                CurrentDirectory = GetNextCluster(CurrentDirectory);
+                }
+                CurrentDirectory = previousDirectory;
+        }
+        else
+        {
+        CurrentDirectory = cdCmd(CurrentDirectory, "..");
+        printf("directory not empty\n");
+        }
+
+        // int next_cluster = CurrentDirectory;
+
+        // fseek(imgFile, ClusterByteOffset(next_cluster), SEEK_SET);
+
+        // DIR entry;
+        // int i;
+        // //while(next_cluster <= 0x0FFFFFF8) {
+        // for(i = 0; i < (BytesPerCluster /32); i++) {
+        //         fread(&entry, sizeof(DIR), 1, imgFile);
+        //         if(entry.DIR_Attr == 0x0F){                             					//if longfgile ignore
+        //             continue;
+        //         }
+        //         if(entry.DIR_Name[0] == 0 || entry.DIR_Name[0] == 0xE5) 					//if deleted entry ignore
+        //         {
+        //                 continue;
+        //         }
+        //         //CurrentDirectory = FatEntryOffset(getHiLoClus(entry.DIR_FstClusHi, entry.DIR_FstClusLo));
+        //         trim(entry.DIR_Name);
+        //         if(!strcmp(token, entry.DIR_Name)){
+        //                 if(entry.DIR_Attr == 0x10){
+        //                         CurrentDirectory = getHiLoClus(entry.DIR_FstClusHi, entry.DIR_FstClusLo)
+        //                         break;
+        //                 }else{
+        //                         printf("%s not a directory\n", token);
+        //                 }
+        //         }
+        //}
+//
+  //      return CurrentDirectory;
+}
+
+
+
+
+
+
 // int findUnusedCluster(FILE *fp, int startCluster) {
 //         int fatOffset = startCluster * 4;
 //         int fatSector = BootBlock.BPB_RsvdSecCnt + (fatOffset / BootBlock.BPB_BytsPerSec);
@@ -966,3 +1139,57 @@ int cdCmd(int CurrentDirectory, char* token)
 
 
 
+    /*
+                CurrentDirectory = cdCmd(CurrentDirectory, "..");
+                printf("location = %d\n", ClusterByteOffset(CurrentDirectory));
+
+                for(i = 0; i < (BytesPerCluster /32); i++) {
+                fread(&entry, sizeof(DIR), 1, imgFile);
+                if(entry.DIR_Attr == 0x0F){                             					//if longfgile ignore
+                    continue;
+                }
+                
+                //printf("location = %d\n", ClusterByteOffset(CurrentDirectory));
+
+                if(entry.DIR_Name[0] == 0 || entry.DIR_Name[0] == 0xE5) 					//if deleted entry ignore
+                {
+                        continue;
+                }
+                */
+                //printf("location = %d\n", ClusterByteOffset(CurrentDirectory));
+
+                //CurrentDirectory = FatEntryOffset(getHiLoClus(entry.DIR_FstClusHi, entry.DIR_FstClusLo));
+                /*
+                trim(entry.DIR_Name);
+                printf("token = %s", token);
+                printf("DirName = %s", entry.DIR_Name);
+                if(!strcmp(token, entry.DIR_Name)){
+                printf("location = %d\n", ClusterByteOffset(CurrentDirectory));
+                        if(entry.DIR_Attr == 0x10){
+                                CurrentDirectory = getHiLoClus(entry.DIR_FstClusHi, entry.DIR_FstClusLo);
+                                if(CurrentDirectory == 0)
+                                {
+                                        CurrentDirectory = BootBlock.BPB_RootClus;
+                                }
+                                fseek(imgFile, FatEntryOffset(CurrentDirectory), SEEK_SET);
+                                int* zero;
+                                *zero = 0x00000000;
+                                fwrite(zero, sizeof(int), 1, imgFile);
+                                fseek(imgFile,  ClusterByteOffset(CurrentDirectory), SEEK_SET);
+                                //printf("location = %d\n", ClusterByteOffset(CurrentDirectory));
+                                if(GetNextCluster(CurrentDirectory) < 0x0FFFFFF8)
+                                {
+                                        entry.DIR_Name[0] = 0x5E;
+                                        printf("%d\n", entry.DIR_Name[0]);
+                                }
+                                else{
+                                        entry.DIR_Name[0] = 0x00;
+                                        printf("%d\n", entry.DIR_Name[0]);
+
+                                }
+
+                                break;
+                        }else{
+                        }
+                }
+                */
