@@ -121,7 +121,7 @@ char * get_input();
 void add_token(tokenlist * tokens, char * item);
 void add_to_path(char * dir);
 int lsCmd(int);
-int cdCmd(int, char*);
+int cdCmd(char*);
 void OpenCmd(char*, char*);
 int getHiLoClus(unsigned short, unsigned short);
 void closeCmd(char*);
@@ -134,6 +134,7 @@ void renameCmd(char *, char* );
 //void findFile(int);
 void creat(char*);
 int findFile(char*);
+void mkdirCmd(char*);
 
 
 int main(int argc, char * argv[]) {
@@ -184,7 +185,7 @@ int main(int argc, char * argv[]) {
                 else if(strcmp(tokens->items[0], "cd") == 0){
                         if(tokens->items[1] != NULL )
                         {
-                        CurrentDirectory = cdCmd(CurrentDirectory, tokens->items[1]);
+                        CurrentDirectory = cdCmd(tokens->items[1]);
                         }
                 }
                 else if(strcmp(tokens->items[0], "size") == 0){
@@ -201,7 +202,7 @@ int main(int argc, char * argv[]) {
                 else if(strcmp(tokens->items[0], "mkdir") == 0){
                         printf("calling mkdir\n");
                         if(tokens->items[1]!= NULL){
-                        mkdir(tokens->items[1]);
+                        mkdirCmd(tokens->items[1]);
                         }
 /*			int mkdirRes = mkdir(BootBlock, tokens->items[1]);
                         if(mkdirRes == 0){
@@ -343,7 +344,7 @@ int BackToFat(int cluster){
 	}
 }
 
-int allocateClus(cluster)
+int allocateClus(int cluster)
 {
         int value;
         int* ptr = &value;
@@ -859,9 +860,10 @@ char * get_input() {
         return buf;
 }
 
-void mkdir(char* token)
+void mkdirCmd(char * token)
 {
         int next_cluster = CurrentDirectory;
+        int thisDirectory =CurrentDirectory;
         DIR newEntry;
         DIR entry;
         DIR parent;
@@ -898,11 +900,11 @@ void mkdir(char* token)
                         {
                                 fseek(imgFile, newDirLoc, SEEK_SET);
                                 fwrite(&newEntry, sizeof(DIR), 1, imgFile);
-                                CurrentDirectory = cdCmd(CurrentDirectory, token);
+                                thisDirectory = cdCmd(token);
                                 strcpy(parent.DIR_Name, "..");
-                                fseek(imgFile, ClusterByteOffset(CurrentDirectory), SEEK_SET);
+                                fseek(imgFile, ClusterByteOffset(thisDirectory), SEEK_SET);
                                 fwrite(&parent, sizeof(DIR), 1, imgFile);
-                                CurrentDirectory = cdCmd(CurrentDirectory,"..");
+                                thisDirectory = cdCmd("..");
                                 stop = 't';
                                 break;
                         }
@@ -970,7 +972,7 @@ int lsCmd(int Directory)
         return 1;
 }
 
-int cdCmd(int CurrentDirectory, char* token)
+int cdCmd(char* token)
 {
         int next_cluster = CurrentDirectory;
 
@@ -1068,7 +1070,7 @@ int cdCmd(int CurrentDirectory, char* token)
 void rmDir(char * token)
 {
        //printf("current Directory = %d\n", ClusterByteOffset(CurrentDirectory));
-        CurrentDirectory = cdCmd(CurrentDirectory, token);
+        CurrentDirectory = cdCmd(token);
        //printf("current Directory = %d\n", ClusterByteOffset(CurrentDirectory));
         int next_cluster = CurrentDirectory;
 
@@ -1109,7 +1111,7 @@ void rmDir(char * token)
                 //printf("location = %d\n", ftell(imgFile));
                 fseek(imgFile,  ClusterByteOffset(CurrentDirectory), SEEK_SET);
                 //printf("location = %d\n", ClusterByteOffset(CurrentDirectory));
-                CurrentDirectory = cdCmd(CurrentDirectory, "..");
+                CurrentDirectory = cdCmd("..");
                 int previousDirectory = CurrentDirectory;
                 fseek(imgFile, ClusterByteOffset(CurrentDirectory), SEEK_SET);
                 //printf("current location = %d\n", ClusterByteOffset(CurrentDirectory));
@@ -1189,7 +1191,7 @@ void rmDir(char * token)
         }
         else
         {
-        CurrentDirectory = cdCmd(CurrentDirectory, "..");
+        CurrentDirectory = cdCmd("..");
         printf("directory not empty\n");
         }
 
