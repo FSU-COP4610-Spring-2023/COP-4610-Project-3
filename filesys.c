@@ -750,12 +750,24 @@ void writeCmd(char* token1, char* token2){
                                                                 printf("size plus offset is %d\n", sizePlusOffset);
                                                                 if(sizePlusOffset > OpenedFiles[j].fileSize){
                                                                         printf("filesize is less than size plus offset. must allocate new clusters \n");
+									OpenedFiles[j].fileSize += strlen(token2);
+									printf("files position: %d\n", ftell(imgFile));
                                                                         fseek(imgFile, OpenedFiles[j].currentFilePositionOffset + OpenedFiles[j].offset, SEEK_SET);
-                                                                        char buffer[strlen(token2)];
+                                                                        printf("files position: %d\n", ftell(imgFile));
+									char buffer[strlen(token2)];
                                                                         for(int k = 0; k < strlen(token2); k++){
-                                                                                fwrite(buffer[k], sizeof(char), 1, imgFile);
-                                                                        }
-                                                                        OpenedFiles[j].offset += strlen(token2);
+										fwrite(&buffer[k], sizeof(char), 1, imgFile);
+                                                                        	OpenedFiles[j].offset++;
+										if(OpenedFiles[j].offset % BytesPerCluster == 0){
+											if(BackToFat(OpenedFiles[j].currentFilePosition) != 0){
+												fseek(imgFile, BackToFat(OpenedFiles[j].currentFilePosition), SEEK_SET);
+											}else{
+												extendFatChain(OpenedFiles[j].currentFilePosition);
+												fseek(imgFile, BackToFat(OpenedFiles[j].currentFilePosition), SEEK_SET);
+											}
+										}
+									}
+                                                                        //OpenedFiles[j].offset += strlen(token2);
                                                                 }else{
 //                                                                        int back = BackToFat(OpenedFiles[j].currentFilePosition);
                                                                         fseek(imgFile, OpenedFiles[j].currentFilePositionOffset + OpenedFiles[j].offset, SEEK_SET);
