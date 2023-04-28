@@ -213,6 +213,7 @@ int main(int argc, char * argv[]) {
                 }
                 else if(strcmp(tokens->items[0], "rm") == 0){
                         printf("calling rm\n");
+                        printLoc();
                 }
                 else if(strcmp(tokens->items[0], "rmdir") == 0){
                         if(tokens->items[1] != NULL)
@@ -338,6 +339,7 @@ int allocateClus(cluster)
         int value;
         int* ptr = &value;
         int ctr;
+        int found = 0xFFFFFFFF;
         fseek(imgFile, FatEntryOffset(cluster), SEEK_SET);
         do{
                 fread(ptr, sizeof(int), 1, imgFile);
@@ -347,7 +349,8 @@ int allocateClus(cluster)
         }while(*ptr != 0);
         fseek(imgFile, ftell(imgFile)-4, SEEK_SET);
         printf("ftell = %d\n", ftell(imgFile));
-
+        fwrite(&found, sizeof(unsigned int), 1, imgFile);
+        fseek(imgFile, ClusterByteOffset(cluster), SEEK_SET);
         return ctr;
 }
 
@@ -617,6 +620,13 @@ void readCmd(char* token, unsigned int token2){
         }
 }
 
+void printLoc(){
+        printf("location = %d\n", ftell(imgFile));
+
+
+}
+
+
 int FindFile(char* file){
         int next_cluster = CurrentDirectory;
 
@@ -813,6 +823,10 @@ void mkdir(char* token)
         int next_cluster = CurrentDirectory;
         DIR newEntry;
         DIR entry;
+        DIR parent;
+        DIR CHILD;
+        fseek(imgFile, ClusterByteOffset(CurrentDirectory), SEEK_SET);
+        fread(&parent, sizeof(DIR), 1, imgFile);
         char fileName[11];
         for (int i =0; i < 11; i++)
         {
@@ -824,29 +838,40 @@ void mkdir(char* token)
         newEntry.DIR_CrtTime=0;
         newEntry.DIR_CrtDate=0;
         newEntry.DIR_LstAccDate=0;
-        newEntry.DIR_FstClusHi=0; 
+        newEntry.DIR_FstClusHi=(allocateClus(CurrentDirectory)>>16); 
         newEntry.DIR_WrtTime=0;
         newEntry.DIR_WrtDate=0;
-        newEntry.DIR_FstClusLo = allocateClus(CurrentDirectory); 
+        newEntry.DIR_FstClusLo = (allocateClus(CurrentDirectory)& 0xffff);
         newEntry.DIR_FileSize = 0; 
+        char stop = 'f';
         while (next_cluster < 0x0FFFFFF8)
         {
                 fseek(imgFile, ClusterByteOffset(next_cluster), SEEK_SET);
-        for(int i = 0; i < (BytesPerCluster /32); i++) {
-                int newDirLoc = ftell(imgFile);
-                fread(&entry, sizeof(DIR), 1, imgFile);
-                if(entry.DIR_Attr == 0x0F){
-                    continue;    
-                }
-                if(entry.DIR_Name[0] == 0 || entry.DIR_Name[0] == 0xE5) //5e or e5?
-                {
-                        fseek(imgFile, newDirLoc, SEEK_SET);
-                        fwrite(&newEntry, sizeof(DIR), 1, imgFile);
-                        break;
-                }
+                for(int i = 0; i < (BytesPerCluster /32); i++) {
+                        int newDirLoc = ftell(imgFile);
+                        fread(&entry, sizeof(DIR), 1, imgFile);
+                        if(entry.DIR_Attr == 0x0F){
+                                continue;    
+                        }
+                        if(entry.DIR_Name[0] == 0 || entry.DIR_Name[0] == 0xE5) //5e or e5?
+                        {
+                                fseek(imgFile, newDirLoc, SEEK_SET);
+                                fwrite(&newEntry, sizeof(DIR), 1, imgFile);
+                                CurrentDirectory = cdCmd(CurrentDirectory, token);
+                                strcpy(parent.DIR_Name, "..");
+                                fseek(imgFile, ClusterByteOffset(CurrentDirectory), SEEK_SET);
+                                fwrite(&parent, sizeof(DIR), 1, imgFile);
+                                CurrentDirectory = cdCmd(CurrentDirectory,"..");
+                                stop = 't';
+                                break;
+                        }
                 
-        }
-        next_cluster = GetNextCluster(next_cluster);   
+                }
+                if(stop == 't')
+                {
+                           break;
+                }
+                next_cluster = GetNextCluster(next_cluster);
         }
         
         
