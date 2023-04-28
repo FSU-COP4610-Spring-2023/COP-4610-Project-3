@@ -346,21 +346,23 @@ int BackToFat(int cluster){
 
 int allocateClus(int cluster)
 {
-        int value;
-        int* ptr = &value;
-        int ctr;
-        int found = 0xFFFFFFFF;
-        fseek(imgFile, FatEntryOffset(cluster), SEEK_SET);
+        unsigned long i_pos = ftell(imgFile);
+        unsigned int value;
+        int ctr =0;
+        unsigned int found = 0xFFFFFFFF;
+        fseek(imgFile, FatEntryOffset(0), SEEK_SET);
         do{
-                fread(ptr, sizeof(int), 1, imgFile);
+                fread(&value, sizeof(unsigned int), 1, imgFile);
                 ctr++;
-                
-
-        }while(*ptr != 0);
+        }while(value != 0);
+        ctr -= 1;
         fseek(imgFile, ftell(imgFile)-4, SEEK_SET);
         printf("ftell = %d\n", ftell(imgFile));
         fwrite(&found, sizeof(unsigned int), 1, imgFile);
-        fseek(imgFile, ClusterByteOffset(cluster), SEEK_SET);
+        printf("location = %d\n", ftell(imgFile));
+        fseek(imgFile, i_pos, SEEK_SET);
+        printf("ctr: %d\n", ctr);
+        
         return ctr;
 }
 
@@ -864,29 +866,32 @@ void mkdirCmd(char * token)
 {
         int next_cluster = CurrentDirectory;
         int thisDirectory =CurrentDirectory;
+        printf("thisDirectory = %d\n", thisDirectory);
+        
         DIR newEntry;
         DIR entry;
-        DIR parent;
-        DIR CHILD;
-        fseek(imgFile, ClusterByteOffset(CurrentDirectory), SEEK_SET);
-        fread(&parent, sizeof(DIR), 1, imgFile);
+        //fseek(imgFile, ClusterByteOffset(CurrentDirectory), SEEK_SET);
+        //fread(&parent, sizeof(DIR), 1, imgFile);
         char fileName[11];
         for (int i =0; i < 11; i++)
         {
                 newEntry.DIR_Name[i] = token[i];
         }
+        int loc= allocateClus(CurrentDirectory);
         newEntry.DIR_Attr = 0x10;
         newEntry.DIR_NTRes =0;
         newEntry.DIR_CrtTimeTenth=0;
         newEntry.DIR_CrtTime=0;
         newEntry.DIR_CrtDate=0;
         newEntry.DIR_LstAccDate=0;
-        newEntry.DIR_FstClusHi=(allocateClus(CurrentDirectory)>>16); 
+        newEntry.DIR_FstClusHi=(loc>>16); 
         newEntry.DIR_WrtTime=0;
         newEntry.DIR_WrtDate=0;
-        newEntry.DIR_FstClusLo = (allocateClus(CurrentDirectory)& 0xffff);
+        newEntry.DIR_FstClusLo = (loc& 0xffff);
         newEntry.DIR_FileSize = 0; 
         char stop = 'f';
+
+        
         while (next_cluster < 0x0FFFFFF8)
         {
                 fseek(imgFile, ClusterByteOffset(next_cluster), SEEK_SET);
@@ -900,11 +905,11 @@ void mkdirCmd(char * token)
                         {
                                 fseek(imgFile, newDirLoc, SEEK_SET);
                                 fwrite(&newEntry, sizeof(DIR), 1, imgFile);
-                                thisDirectory = cdCmd(token);
-                                strcpy(parent.DIR_Name, "..");
-                                fseek(imgFile, ClusterByteOffset(thisDirectory), SEEK_SET);
-                                fwrite(&parent, sizeof(DIR), 1, imgFile);
-                                thisDirectory = cdCmd("..");
+                                //CurrentDirectory = cdCmd(token);
+                                //strcpy(parent.DIR_Name, "..");
+                                //fseek(imgFile, ClusterByteOffset(CurrentDirectory), SEEK_SET);
+                                //fwrite(&parent, sizeof(DIR), 1, imgFile);
+                                //CurrentDirectory = cdCmd("..");
                                 stop = 't';
                                 break;
                         }
@@ -916,6 +921,40 @@ void mkdirCmd(char * token)
                 }
                 next_cluster = GetNextCluster(next_cluster);
         }
+        fseek(imgFile, ClusterByteOffset(loc), SEEK_SET);
+        DIR dot;
+        dot.DIR_Attr = 0x10;
+                dot.DIR_NTRes =0;
+        dot.DIR_CrtTimeTenth=0;
+        dot.DIR_CrtTime=0;
+        dot.DIR_CrtDate=0;
+        dot.DIR_LstAccDate=0;
+        dot.DIR_FstClusHi=(loc >>16); 
+        dot.DIR_WrtTime=0;
+        dot.DIR_WrtDate=0;
+        dot.DIR_FstClusLo = (loc & 0xffff);
+        dot.DIR_FileSize = 0; 
+        strcpy(dot.DIR_Name, ".");
+        fwrite(&dot, sizeof(DIR), 1, imgFile);
+
+
+                DIR dotdot;
+                dotdot.DIR_Attr = 0x10;
+                dotdot.DIR_NTRes =0;
+        dotdot.DIR_CrtTimeTenth=0;
+        dotdot.DIR_CrtTime=0;
+        dotdot.DIR_CrtDate=0;
+        dotdot.DIR_LstAccDate=0;
+        dotdot.DIR_FstClusHi=(CurrentDirectory >>16); 
+        dotdot.DIR_WrtTime=0;
+        dotdot.DIR_WrtDate=0;
+        dotdot.DIR_FstClusLo = (CurrentDirectory & 0xffff);
+        dotdot.DIR_FileSize = 0; 
+        strcpy(dotdot.DIR_Name, "..");
+                fwrite(&dotdot, sizeof(DIR), 1, imgFile);
+        
+                printf("currentDirectory = %d\n", CurrentDirectory);
+
 }
 
 // void read_sector(FILE* imgFile, unsigned int sector_number, void* buffer)
@@ -1001,6 +1040,7 @@ int cdCmd(char* token)
                                 {
                                         CurrentDirectory = BootBlock.BPB_RootClus;
                                 }
+                                printf("adding token: %s\n", token);
 				add_to_path(token);
                                 //CurrentDirectory = FatEntryOffset(getHiLoClus(entry.DIR_FstClusHi, entry.DIR_FstClusLo));
                                 break;
