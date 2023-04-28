@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdbool.h>
 //#include <ctype.h>
 //#include <fcntl.h>
 #define BUFSIZE 40
@@ -114,6 +115,8 @@ unsigned int FirstFatSector;
 unsigned int BytesPerCluster;
 int NumOpenFiles;
 
+
+
 OpenFile OpenedFiles[10];
 tokenlist * tokenize(char * input);
 void free_tokens(tokenlist * tokens);
@@ -135,7 +138,8 @@ void renameCmd(char *, char* );
 void creat(char*);
 int findFile(char*);
 void mkdirCmd(char*);
-
+void rmCmd(char*);
+void rmdirCmd(char*);
 
 int main(int argc, char * argv[]) {
         // error checking for number of arguments.
@@ -218,11 +222,12 @@ int main(int argc, char * argv[]) {
                 }
                 else if(strcmp(tokens->items[0], "rm") == 0){
                         printf("calling rm\n");
+                        rmCmd(tokens->items[1]);
                 }
                 else if(strcmp(tokens->items[0], "rmdir") == 0){
                         if(tokens->items[1] != NULL)
                         {
-                                rmDir(tokens->items[1]);
+                                rmdirCmd(tokens->items[1]);
                         }
                 }
                 else if(strcmp(tokens->items[0], "open") == 0){
@@ -1106,6 +1111,159 @@ int cdCmd(char* token)
 }
 
 
+void Deallocate(cluster)
+{
+        printf("cluster = %d\n", cluster);
+        int temp =0;
+        int zero = 0;
+        int location=0;
+        fseek(imgFile, FatEntryOffset(cluster), SEEK_SET);
+        do{
+        location = ftell(imgFile);
+        printf("location = %d\n", location);
+        fread(&temp, sizeof(int), 1, imgFile);
+        fseek(imgFile, location, SEEK_SET);
+        fwrite(&zero, sizeof(int), 1, imgFile);
+        fseek(imgFile, FatEntryOffset(temp), SEEK_SET);
+        }while(temp < 0x0FFFFFF8);
+}
+
+int empty(cluster)
+{
+        int empty =0;
+        fseek(imgFile, ClusterByteOffset(cluster),SEEK_SET);
+        DIR entry;
+        for(int i = 0; i < (BytesPerCluster/32); i++)
+        {
+                fread(&entry, sizeof(DIR), 1, imgFile);
+                trim(entry.DIR_Name);
+                if(entry.DIR_Name != "." || entry.DIR_Name != "..")
+                {
+                        return empty;
+                }
+        }
+        empty = 1;
+        return empty;
+
+}
+
+void rmdirCmd(char* token)
+{
+DIR entry;
+        int next_cluster = CurrentDirectory;
+        while(next_cluster < 0x0FFFFFF8) {
+                fseek(imgFile, ClusterByteOffset(next_cluster), SEEK_SET);
+                //fseek(imgFile, FatEntryOffset(CurrentDirectory), SEEK_SET);
+                //printf("ftell = %d\n", ftell(imgFile));
+                //fseek(imgFile, ClusterByteOffset(CurrentDirectory), SEEK_SET);
+
+                for(int i = 0; i < (BytesPerCluster /32); i++) {
+                        int NameAddress = ftell(imgFile);
+                        //printf("ftell = %d\n", ftell(imgFile));
+                        fread(&entry, sizeof(DIR), 1, imgFile);
+                        if(entry.DIR_Attr == 0x0F){                             					//if longfgile ignore
+                                continue;
+                        }
+                        if(entry.DIR_Name[0] == 0 || entry.DIR_Name[0] == 0xE5) 					//if deleted entry ignore
+                        {
+                                continue;
+                        }
+                        trim(entry.DIR_Name);
+                        if(strcmp(entry.DIR_Name, token)==0)
+                        {                                
+                                if(entry.DIR_Attr == 0x10){
+                                        if(!empty(getHiLoClus(entry.DIR_FstClusHi, entry.DIR_FstClusLo)))
+                                        {
+                                                printf("directory not empty\n");
+                                                return;
+                                        }
+                                        Deallocate(getHiLoClus(entry.DIR_FstClusHi, entry.DIR_FstClusLo));
+                                        char deleteVar;
+                                        char* delete = &deleteVar;
+                                        *delete = 0xE5;
+                                        if(GetNextCluster(CurrentDirectory) < 0x0FFFFFF8)
+                                        {
+                                                fseek(imgFile, NameAddress, SEEK_SET);
+                                                entry.DIR_Name[0] = 0xE5;
+                                                fwrite(&entry, sizeof(DIR), 1, imgFile);
+                                        }
+                                        else{
+                                                fseek(imgFile,NameAddress, SEEK_SET);
+                                                entry.DIR_Name[0] = 0x00;
+                                                
+                                                fwrite(delete, sizeof(char), 1, imgFile);
+
+                                        }
+                                        break;
+                                }
+                                else{
+                                        printf("%d is not a directory\n", token);
+                                }
+                        }
+                }
+                next_cluster = GetNextCluster(next_cluster);
+        }
+
+}
+
+void rmCmd(char *token)
+{
+        
+        
+        DIR entry;
+        int next_cluster = CurrentDirectory;
+        while(next_cluster < 0x0FFFFFF8) {
+                fseek(imgFile, ClusterByteOffset(next_cluster), SEEK_SET);
+                //fseek(imgFile, FatEntryOffset(CurrentDirectory), SEEK_SET);
+                //printf("ftell = %d\n", ftell(imgFile));
+                //fseek(imgFile, ClusterByteOffset(CurrentDirectory), SEEK_SET);
+
+                for(int i = 0; i < (BytesPerCluster /32); i++) {
+                        int NameAddress = ftell(imgFile);
+                        //printf("ftell = %d\n", ftell(imgFile));
+                        fread(&entry, sizeof(DIR), 1, imgFile);
+                        if(entry.DIR_Attr == 0x0F){                             					//if longfgile ignore
+                                continue;
+                        }
+                        if(entry.DIR_Name[0] == 0 || entry.DIR_Name[0] == 0xE5) 					//if deleted entry ignore
+                        {
+                                continue;
+                        }
+                        trim(entry.DIR_Name);
+                        if(strcmp(entry.DIR_Name, token)==0)
+                        {                                
+                                if(entry.DIR_Attr == 0x20){
+                                       
+                                        Deallocate(getHiLoClus(entry.DIR_FstClusHi, entry.DIR_FstClusLo));
+                                        char deleteVar;
+                                        char* delete = &deleteVar;
+                                        *delete = 0xE5;
+                                        if(GetNextCluster(CurrentDirectory) < 0x0FFFFFF8)
+                                        {
+                                                fseek(imgFile, NameAddress, SEEK_SET);
+                                                entry.DIR_Name[0] = 0xE5;
+                                                fwrite(&entry, sizeof(DIR), 1, imgFile);
+                                        }
+                                        else{
+                                                fseek(imgFile,NameAddress, SEEK_SET);
+                                                entry.DIR_Name[0] = 0x00;
+                                                
+                                                fwrite(delete, sizeof(char), 1, imgFile);
+
+                                        }
+                                        break;
+                                }
+                                else{
+                                        printf("%d is not a file\n", token);
+                                }
+                        }
+                }
+                next_cluster = GetNextCluster(next_cluster);
+        }
+
+
+}
+
 
 void rmDir(char * token)
 {
@@ -1195,30 +1353,7 @@ void rmDir(char * token)
                                         // }
                                         //cdCmd(CurrentDirectory, token);
                                         //printf("location = %d\n", ClusterByteOffset(CurrentDirectory));
-                                        char deleteVar;
-                                        char* delete = &deleteVar;
-                                        *delete = 0xE5;
-                                        if(GetNextCluster(CurrentDirectory) < 0x0FFFFFF8)
-                                        {
-                                                //printf("DirName = %s\n", entry.DIR_Name);
-                                                fseek(imgFile, NameAddress, SEEK_SET);
-
-                                                //printf("location = %d\n", ftell(imgFile));
-                                                entry.DIR_Name[0] = 0xE5;
-                                                fwrite(&entry, sizeof(DIR), 1, imgFile);
-                                                //printf("%d\n", entry.DIR_Name[0]);
-                                                //printf("DirName = %s\n", entry.DIR_Name);
-
-                                        }
-                                        else{
-                                                fseek(imgFile,NameAddress, SEEK_SET);
-                                                entry.DIR_Name[0] = 0x00;
-                                                
-                                                fwrite(delete, sizeof(char), 1, imgFile);
-                                                //printf("%d\n", entry.DIR_Name[0]);
-
-                                        }
-                                        break;
+                                        
                                 }
                                 else{
                                 }
