@@ -994,7 +994,7 @@ void mkdirCmd(char * token)
 
 // }
 
-// void dirEntryInit(FILE* imgFile, unsigned int sector_number, void* buffer)
+// void dirEntryInit(FILE* imgFile, unsigned int sector_number, void* bulffer)
 // {
 
 //         fseek(imgFile, sector_number, SEEK_SET);
@@ -1153,17 +1153,21 @@ void Deallocate(cluster)
 
 int empty(cluster)
 {
-        int empty =0;
+        int empty = 0;
         fseek(imgFile, ClusterByteOffset(cluster),SEEK_SET);
+        printf("ftell = %d\n", ftell(imgFile));
         DIR entry;
         for(int i = 0; i < (BytesPerCluster/32); i++)
         {
                 fread(&entry, sizeof(DIR), 1, imgFile);
                 trim(entry.DIR_Name);
-                if(entry.DIR_Name != "." || entry.DIR_Name != "..")
+                printf("directory Name: %s\n", entry.DIR_Name);
+                if(entry.DIR_Name[0] != '.' && entry.DIR_Name[0] != 0xE5 && entry.DIR_Name[0] != 0)
                 {
+                        printf("directory not empty\n");
                         return empty;
                 }
+                
         }
         empty = 1;
         return empty;
@@ -1172,7 +1176,12 @@ int empty(cluster)
 
 void rmdirCmd(char* token)
 {
-DIR entry;
+        if(!strcmp(token, "..") || !strcmp(token, "."))
+        {
+                printf("cannot remove . or ..\n");
+                return;
+        }
+        DIR entry;
         int next_cluster = CurrentDirectory;
         while(next_cluster < 0x0FFFFFF8) {
                 fseek(imgFile, ClusterByteOffset(next_cluster), SEEK_SET);
@@ -1195,11 +1204,11 @@ DIR entry;
                         if(strcmp(entry.DIR_Name, token)==0)
                         {                                
                                 if(entry.DIR_Attr == 0x10){
-                                        if(!empty(getHiLoClus(entry.DIR_FstClusHi, entry.DIR_FstClusLo)))
+                                        if(empty(getHiLoClus(entry.DIR_FstClusHi, entry.DIR_FstClusLo)) == 0)
                                         {
-                                                printf("directory not empty\n");
                                                 return;
                                         }
+                                        
                                         Deallocate(getHiLoClus(entry.DIR_FstClusHi, entry.DIR_FstClusLo));
                                         char deleteVar;
                                         char* delete = &deleteVar;
