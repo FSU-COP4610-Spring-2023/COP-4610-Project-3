@@ -371,6 +371,24 @@ int allocateClus(int cluster)
         return ctr;
 }
 
+int extendFatChain(int cluster)
+{
+        int next_cluster = FatEntryOffset(cluster);
+        fseek(imgFile, next_cluster, SEEK_SET);
+        int end = -1;
+        int newclust = allocateClus(cluster);
+
+        while(next_cluster != -1)
+        {
+                fread(&next_cluster, sizeof(int),1, imgFile);
+        }
+        fseek(imgFile, ftell(imgFile)-4, SEEK_SET);
+        fwrite(&newclust, sizeof(int), 1, imgFile);
+        return newclust;
+}
+
+
+
 void OpenCmd(char* token1, char* token2){
         int next_cluster = CurrentDirectory;
 
