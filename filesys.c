@@ -217,7 +217,6 @@ int main(int argc, char * argv[]) {
                 }
                 else if(strcmp(tokens->items[0], "rm") == 0){
                         printf("calling rm\n");
-                        printLoc();
                 }
                 else if(strcmp(tokens->items[0], "rmdir") == 0){
                         if(tokens->items[1] != NULL)
