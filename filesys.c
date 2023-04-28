@@ -728,6 +728,28 @@ void writeCmd(char* token1, char* token2){
                                                                 return;
                                                         }else{
                                                                 printf("writing to %s in -w mode\n", OpenedFiles[j].fileName);
+                                                                unsigned int sizePlusOffset = OpenedFiles[j].offset + OpenedFiles[j].fileSize;
+                                                                printf("size plus offset is %d\n", sizePlusOffset);
+                                                                if(sizePlusOffset > OpenedFiles[j].fileSize){
+                                                                        printf("filesize is less than size plus offset. must allocate new clusters \n");
+                                                                }else{
+                                                                        int back = BackToFat(OpenedFiles[j].currentFilePosition);
+                                                                        fseek(imgFile, sizePlusOffset, SEEK_SET);
+									unsigned int pos = ftell(imgFile);
+                                                                        int test = strlen(token2);
+                                                                        char buffer[strlen(token2)];
+									strcpy(buffer, token2);
+									printf("buffer: %s\n", buffer);
+									printf("length of token: %d\n", strlen(token2));
+									printf("len of buffer: %d\n", strlen(buffer));
+									fwrite(buffer, sizeof(char), strlen(token2), imgFile);
+									OpenedFiles[j].offset += strlen(token2);
+                                                                        //for(int k = 0; k < strlen(buffer); k++){
+                                                                        //        fwrite(buffer[k], sizeof(char), 1, imgFile);
+									//	OpenedFiles[j].offset += 1;
+                                                                        //}
+                                                                        //back = BackToFat(back);
+                                                               }
                                                                 return;
                                                         }
                                                 }
@@ -741,6 +763,7 @@ void writeCmd(char* token1, char* token2){
         }
         printf("file %s is not in the current directory\n", token1);
 }
+
 
 void Info(long offset){
         fseek(imgFile, offset, SEEK_SET);
