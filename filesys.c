@@ -755,6 +755,7 @@ void writeCmd(char* token1, char* token2){
                                                                         fseek(imgFile, OpenedFiles[j].currentFilePositionOffset + OpenedFiles[j].offset, SEEK_SET);
                                                                         printf("files position: %d\n", ftell(imgFile));
 									char buffer[strlen(token2)];
+									strcpy(buffer, token2);
                                                                         for(int k = 0; k < strlen(token2); k++){
 										fwrite(&buffer[k], sizeof(char), 1, imgFile);
                                                                         	OpenedFiles[j].offset++;
