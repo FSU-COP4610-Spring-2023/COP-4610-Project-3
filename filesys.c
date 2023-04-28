@@ -728,32 +728,22 @@ void writeCmd(char* token1, char* token2){
                                                                 if(sizePlusOffset > OpenedFiles[j].fileSize){
                                                                         printf("filesize is less than size plus offset. must allocate new clusters \n");
                                                                 }else{
-//                                                                        printf("filesize is greater than size plus offset\n");
                                                                         int back = BackToFat(OpenedFiles[j].currentFilePosition);
-									printf("test 1\n");
                                                                         fseek(imgFile, sizePlusOffset, SEEK_SET);
-                                                                        printf("test 2\n");
 									unsigned int pos = ftell(imgFile);
-//                                                                      printf("file position: %d\n", pos);
                                                                         int test = strlen(token2);
-//                                                                      printf("size of token2: %d\n", test);
                                                                         char buffer[strlen(token2)];
-                                                                        printf("test 3\n");
 									strcpy(buffer, token2);
-//                                                                      printf("buffer: %s\n", buffer);
-                                                                        //write into file
-//                                                                      while(OpenedFiles[j].offset < OpenedFiles[j].fileSize){
-//                                                                              fwrite(buffer, sizeof(char), 1, imgFile);
-//                                                                              OpenedFiles[j].offset += 1;
-//                                                                      }
-									printf("test 4\n");
-                                                                        for(int k = 0; k < strlen(buffer); k++){
-                                                                                fwrite(buffer[k], sizeof(char), 1, imgFile);
-                                                                                printf("test 5\n");
-										OpenedFiles[j].offset += 1;
-                                                                        }
-                                                                        back = BackToFat(back);
-									printf("test 6\n");
+									printf("buffer: %s\n", buffer);
+									printf("length of token: %d\n", strlen(token2));
+									printf("len of buffer: %d\n", strlen(buffer));
+									fwrite(buffer, sizeof(char), strlen(token2), imgFile);
+									OpenedFiles[j].offset += strlen(token2);
+                                                                        //for(int k = 0; k < strlen(buffer); k++){
+                                                                        //        fwrite(buffer[k], sizeof(char), 1, imgFile);
+									//	OpenedFiles[j].offset += 1;
+                                                                        //}
+                                                                        //back = BackToFat(back);
                                                                }
                                                                 return;
                                                         }
