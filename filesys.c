@@ -1264,7 +1264,7 @@ void rmCmd(char *token)
                                         break;
                                 }
                                 else{
-                                        printf("%d is not a file\n", token);
+                                        printf("%s is not a file\n", token);
                                 }
                         }
                 }
