@@ -166,8 +166,9 @@ int main(int argc, char * argv[]) {
         char *input;
 
         long offset = 0;
-       // CurrentDirectory = FirstDataSector * BootBlock.BPB_BytsPerSec +32;
         CurrentDirectory = BootBlock.BPB_RootClus;
+
+	//menu of the program 
         while(1) {
                 printf("%s/>", cwd.path);
                 input = get_input();
@@ -265,6 +266,8 @@ int main(int argc, char * argv[]) {
 		else if(strcmp(tokens->items[0], "rename") == 0){
 			renameCmd(tokens->items[1], tokens->items[2]);
 		}
+		else if(strcmp(tokens->items[0], "cp") == 0){
+		}
                 free(input);
                 free_tokens(tokens);
         }
@@ -282,6 +285,7 @@ void trim(char* ptr)
         }
 }
 
+//gets the conctination of the hi and lo clusters of a directory
 int getHiLoClus(unsigned short hi, unsigned short lo){
         hi = (hi << 8);
         unsigned int concat = hi | lo;
@@ -308,6 +312,7 @@ int ClusterByteOffset(int cluster) {
         return clus;
 }
 
+//fseeks back to the original fat table location of a cluster chain
 int BackToFat(int cluster){
 	int next_cluster = (FatEntryOffset(cluster)) + 4;
 	fseek(imgFile, next_cluster, SEEK_SET);
@@ -365,8 +370,11 @@ int extendFatChain(int cluster)
         return newclust;
 }
 
-
-
+//opens a file in the table. Searches the fat image for 
+//the specified file. if found sets the opened method 
+//to whatever was specified by the use along with 
+//other file data like size, and offset position in
+//the table
 void OpenCmd(char* token1, char* token2){
         int next_cluster = CurrentDirectory;
 
@@ -437,6 +445,8 @@ void OpenCmd(char* token1, char* token2){
 	return;
 }
 
+//switches an opened file to close by changing its current
+//opene ed method to 0 as a form of lazy delete
 void closeCmd(char* token){
         int next_cluster = CurrentDirectory;
 
@@ -465,6 +475,7 @@ void closeCmd(char* token){
         }
 }
 
+//prints a readable output of opened file data
 void lsofCmd(){
 	if(NumOpenFiles == 0){
 		printf("No files are opened right now\n");
@@ -502,6 +513,7 @@ void lsofCmd(){
 	}
 }
 
+//returns the current size of the file based on DIR_FileSize
 void sizeCmd(char* token){
         int next_cluster = CurrentDirectory;
 
@@ -523,6 +535,8 @@ void sizeCmd(char* token){
         }
 }
 
+//changes the current offset of the file
+//file must be open to lseek
 void lseekCmd(char* token, unsigned int o){
         int next_cluster = CurrentDirectory;
 
@@ -557,6 +571,9 @@ void lseekCmd(char* token, unsigned int o){
         }
 }
 
+//read in files data to print to the user. searches for 
+//the file in the cwd and if found read byte by byte
+//of the file based on its location in the table
 void readCmd(char* token, unsigned int token2){
         int next_cluster = CurrentDirectory;
 
@@ -668,9 +685,8 @@ void readCmd(char* token, unsigned int token2){
         }
 }
 
-
-
-
+//helper to find a file in the fat table. seraches based
+//on file name passed in
 int findFile(char* file){
         int next_cluster = CurrentDirectory;
 
@@ -691,6 +707,9 @@ int findFile(char* file){
         return -1;
 }
 
+//Renames files and directories. searched for the file 
+//and if found changes DIR_Name to whatever is desires
+//as long as the desired name does not already exist
 void renameCmd(char * token1, char* token2){
         int next_cluster = CurrentDirectory;
 
@@ -737,6 +756,9 @@ void renameCmd(char * token1, char* token2){
         }
 }
 
+//writes data to a file. searches for a specified file
+//and once found writes in token2 to the specified file
+//at the location in the table
 void writeCmd(char* token1, char* token2){
         int next_cluster = CurrentDirectory;
 
@@ -814,6 +836,7 @@ void writeCmd(char* token1, char* token2){
         printf("file %s is not in the current directory\n", token1);
 }
 
+//prints the info of the fat table
 void Info(long offset){
         fseek(imgFile, offset, SEEK_SET);
         fread(&fsi, sizeof(FSInfo), 1, imgFile);
@@ -1022,6 +1045,7 @@ void mkdirCmd(char * token)
         strcpy(dotdot.DIR_Name, "..");
         fwrite(&dotdot, sizeof(DIR), 1, imgFile);
 }
+
 
 //searches through current working directory and reads each entry.
 int lsCmd(int Directory)
