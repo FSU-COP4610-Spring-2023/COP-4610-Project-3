@@ -1,5 +1,7 @@
 # COP-4610-Project-3
 
+## README.md MEANT TO BE READ IN GITHUB
+
 ## Project Team Members
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Anthony Knapik,
 Nicholas Ratzlaff,
