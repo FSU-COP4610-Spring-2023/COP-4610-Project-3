@@ -270,7 +270,7 @@ int main(int argc, char * argv[]) {
         }
         return 0;
 }
-
+//trims a character array passed in to fit into entry names
 void trim(char* ptr)
 {
         for(int i = 0; i < 11; i++)
@@ -320,6 +320,11 @@ int BackToFat(int cluster){
 	}
 }
 
+//loops through the fat starting at entry zero
+//and increments counter as you search for a empty
+//entry, then sets the entry to the new end of file marker
+//then returns the new cluster location as the number of
+//entries you read.
 int allocateClus(int cluster)
 {
         unsigned long i_pos = ftell(imgFile);
@@ -339,6 +344,11 @@ int allocateClus(int cluster)
         return ctr;
 }
 
+
+//calls the allocate cluster to get a new cluster position,
+//then finds the end of the fat chain of the cluster passed in
+//then sets the end of the chain to the new cluster location,
+//lastly returns the new location.
 int extendFatChain(int cluster)
 {
         int next_cluster = FatEntryOffset(cluster);
@@ -931,12 +941,13 @@ char * get_input() {
         return buf;
 }
 
+//make directory command
 void mkdirCmd(char * token)
 {
         int next_cluster = CurrentDirectory;
         int thisDirectory =CurrentDirectory;
-        DIR newEntry;
-        DIR entry;
+        DIR newEntry; 
+        DIR entry; //used when scanning for a spot to place new directory.
         char fileName[11];
         for (int i =0; i < 11; i++)
         {
@@ -955,6 +966,7 @@ void mkdirCmd(char * token)
         newEntry.DIR_FstClusLo = (loc& 0xffff);
         newEntry.DIR_FileSize = 0; 
         char stop = 'f';
+        //scan for spot in current directory to write in new entry as a direntry.
         while (next_cluster < 0x0FFFFFF8)
         {
                 fseek(imgFile, ClusterByteOffset(next_cluster), SEEK_SET);
@@ -979,6 +991,7 @@ void mkdirCmd(char * token)
                 }
                 next_cluster = GetNextCluster(next_cluster);
         }
+        //go into the newly made directory and create . and .. directories.
         fseek(imgFile, ClusterByteOffset(loc), SEEK_SET);
         DIR dot;
         dot.DIR_Attr = 0x10;
@@ -1010,6 +1023,7 @@ void mkdirCmd(char * token)
         fwrite(&dotdot, sizeof(DIR), 1, imgFile);
 }
 
+//searches through current working directory and reads each entry.
 int lsCmd(int Directory)
 {
         int next_cluster = CurrentDirectory;
@@ -1076,7 +1090,8 @@ int cdCmd(char* token)
         return CurrentDirectory;
 }
 
-
+//goes to the start of the passed clusters fat entry and
+//chains down the list, zeroing out all entries.
 void Deallocate(cluster)
 {
         int temp =0;
@@ -1092,6 +1107,8 @@ void Deallocate(cluster)
         }while(temp < 0x0FFFFFF8);
 }
 
+//helper to see if the directory you want to remove is empty,
+//or in other words has only ., .., or empty/deleted entries.
 int empty(cluster)
 {
         int empty = 0;
@@ -1116,6 +1133,7 @@ int empty(cluster)
 
 void rmdirCmd(char* token)
 {
+        //ensures you dont delete the . or .. directories.
         if(!strcmp(token, "..") || !strcmp(token, "."))
         {
                 printf("cannot remove . or ..\n");
@@ -1140,6 +1158,7 @@ void rmdirCmd(char* token)
                         if(strcmp(entry.DIR_Name, token)==0)
                         {                                
                                 if(entry.DIR_Attr == 0x10){
+                                        //if directory is not empty, then stop.
                                         if(empty(getHiLoClus(entry.DIR_FstClusHi,
                                         entry.DIR_FstClusLo)) == 0)
                                         {
