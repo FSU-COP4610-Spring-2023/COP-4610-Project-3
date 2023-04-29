@@ -75,7 +75,6 @@ the file.
 ## List of Files in the Repository
 filesys.c - Contains all the fuctions to manipulate and read data of different files in the fat32.img. Also contains 
 the menu to ru the functions required by the project.  
-filesys - exectutable of filesys.c  
 README.md - documentation of the project that we are currently reading. Contains bugs, work division, list of files,
 and how to compile the project.  
 fat32.img - fat image that contains the files we are manipulating in the project.   
